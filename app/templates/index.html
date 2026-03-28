@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+
+{% block title %}메인 | HAN Scheduler{% endblock %}
+
+{% block content %}
+<section class="calendar-page">
+    <div class="calendar-toolbar">
+        <div class="calendar-nav">
+            <a class="btn btn-outline" href="/?year={{ prev_year }}&month={{ prev_month }}">◀ 이전달</a>
+            <h1 class="calendar-title">{{ month_label }}</h1>
+            <a class="btn btn-outline" href="/?year={{ next_year }}&month={{ next_month }}">다음달 ▶</a>
+        </div>
+    </div>
+
+    <div class="calendar-card">
+        <div class="calendar-weekdays">
+            {% for weekday in weekdays %}
+                <div class="weekday">{{ weekday }}</div>
+            {% endfor %}
+        </div>
+
+        <div class="calendar-grid">
+            {% for week in weeks %}
+                {% for day in week %}
+                    <div class="calendar-cell {% if not day.is_current_month %}is-other-month{% endif %} {% if day.is_today %}is-today{% endif %} {% if day.has_events %}has-events{% endif %}">
+                        <div class="cell-header">
+                            <span class="day-number">{{ day.day_num }}</span>
+                            {% if day.is_today %}
+                                <span class="today-badge">TODAY</span>
+                            {% endif %}
+                        </div>
+
+                        <div class="cell-body">
+                            {% if day.events %}
+                                {% for event in day.events %}
+                                    <div class="event-chip {% if event.is_applied %}applied{% endif %}">
+                                        <div class="event-main">
+                                            <div class="event-time-row">
+                                                <span class="event-time">{{ event.start_time }}</span>
+                                                <span class="event-capacity">정원 {{ event.capacity }}</span>
+                                            </div>
+                                            <div class="event-title">{{ event.title }}</div>
+                                            {% if event.description %}
+                                                <div class="event-desc">{{ event.description }}</div>
+                                            {% endif %}
+                                        </div>
+
+                                        <div class="event-actions">
+                                            {% if user and user.email %}
+                                                {% if event.is_applied %}
+                                                    <span class="status-pill success">신청완료</span>
+                                                {% else %}
+                                                    <form method="post"
+                                                          action="/apply/{{ event.id }}"
+                                                          onsubmit="return confirm('정말 이 스케줄에 신청하시겠습니까?');">
+                                                        <button type="submit" class="btn btn-xs">신청</button>
+                                                    </form>
+                                                {% endif %}
+                                            {% else %}
+                                                <a href="/login" class="btn btn-xs btn-outline">로그인</a>
+                                            {% endif %}
+
+                                            {% if is_admin %}
+                                                <form method="post"
+                                                      action="/admin/delete/{{ event.id }}"
+                                                      onsubmit="return confirm('이 스케줄을 삭제하시겠습니까?');">
+                                                    <button type="submit" class="btn btn-xs btn-danger">삭제</button>
+                                                </form>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                {% endfor %}
+                            {% else %}
+                                <div class="empty-slot">일정 없음</div>
+                            {% endif %}
+                        </div>
+                    </div>
+                {% endfor %}
+            {% endfor %}
+        </div>
+    </div>
+
+    <div class="legend">
+        <span><i class="dot dot-today"></i> 오늘</span>
+        <span><i class="dot dot-event"></i> 일정 있음</span>
+        <span><i class="dot dot-applied"></i> 내 신청 일정</span>
+    </div>
+</section>
+{% endblock %}

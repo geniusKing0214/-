@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}스케줄 상세{% endblock %}
+{% block content %}
+<div class="card">
+    <div class="page-header">
+        <div>
+            <h1>{{ schedule.title }}</h1>
+            <p class="sub">{{ schedule.description or '설명이 없습니다.' }}</p>
+        </div>
+        <div>
+            {% if current_user and current_user.is_admin %}
+            <a class="btn secondary" href="/admin/schedules/{{ schedule.id }}/applications">신청 관리</a>
+            {% endif %}
+        </div>
+    </div>
+    <div class="detail-grid">
+        <div><strong>날짜</strong><span>{{ schedule.event_date }}</span></div>
+        <div><strong>시간</strong><span>{{ schedule.start_time }} ~ {{ schedule.end_time }}</span></div>
+        <div><strong>신청 마감</strong><span>{{ schedule.apply_deadline.strftime('%Y-%m-%d %H:%M') }}</span></div>
+        <div><strong>정원</strong><span>{{ approved }}/{{ schedule.capacity }}명 확정</span></div>
+        <div><strong>대기 인원</strong><span>{{ pending }}명</span></div>
+        <div><strong>상태</strong><span>{% if now > schedule.apply_deadline %}신청 마감{% else %}신청 가능{% endif %}</span></div>
+    </div>
+</div>
+
+<div class="card mt-lg">
+    <h2>내 신청 상태</h2>
+    {% if not current_user %}
+        <p>신청하려면 로그인이 필요합니다.</p>
+    {% elif my_application %}
+        <div class="status-row">
+            <span class="status {{ my_application.status }}">{{ my_application.status }}</span>
+            <span>
+                {% if my_application.status == 'pending' %}관리자 승인 대기중{% elif my_application.status == 'approved' %}승인 완료{% elif my_application.status == 'rejected' %}거절됨{% else %}취소됨{% endif %}
+            </span>
+        </div>
+        {% if my_application.status in ['pending', 'approved'] %}
+        <form method="post" action="/application/{{ my_application.id }}/cancel">
+            <button class="btn danger" type="submit">신청 취소</button>
+        </form>
+        {% endif %}
+        {% if my_application.status in ['rejected', 'cancelled'] and can_apply_flag %}
+        <form method="post" action="/schedule/{{ schedule.id }}/apply">
+            <button class="btn" type="submit">재신청</button>
+        </form>
+        {% endif %}
+    {% else %}
+        <p class="sub">{{ apply_reason }}</p>
+        {% if can_apply_flag %}
+        <form method="post" action="/schedule/{{ schedule.id }}/apply">
+            <button class="btn" type="submit">신청하기</button>
+        </form>
+        {% else %}
+            <button class="btn disabled" disabled>{{ apply_reason }}</button>
+        {% endif %}
+    {% endif %}
+</div>
+{% endblock %}

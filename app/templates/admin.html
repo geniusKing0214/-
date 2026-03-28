@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+
+{% block title %}관리자 | 스케줄러{% endblock %}
+
+{% block content %}
+<section class="admin-page">
+    <div class="admin-toolbar">
+        <div>
+            <h1 class="page-title">관리자 페이지</h1>
+            <p class="page-desc">스케줄 생성, 삭제, 신청 승인/거절을 관리합니다.</p>
+        </div>
+        <a href="/admin/create" class="btn">스케줄 생성</a>
+    </div>
+
+    <section class="form-card">
+        <h2 class="section-title">이번 달 스케줄</h2>
+
+        {% if events %}
+            <div class="admin-event-list">
+                {% for event in events %}
+                    <div class="admin-event-card">
+                        <div class="admin-event-main">
+                            <div class="admin-event-date">{{ event.date }} {{ event.start_time }}</div>
+                            <div class="admin-event-title">{{ event.title }}</div>
+                            {% if event.description %}
+                                <div class="admin-event-desc">{{ event.description }}</div>
+                            {% endif %}
+                            <div class="admin-event-meta">정원: {{ event.capacity }}</div>
+                        </div>
+
+                        <form method="post"
+                              action="/admin/delete/{{ event.id }}"
+                              onsubmit="return confirm('이 스케줄을 삭제하시겠습니까?');">
+                            <button type="submit" class="btn btn-danger">삭제</button>
+                        </form>
+                    </div>
+                {% endfor %}
+            </div>
+        {% else %}
+            <div class="empty-box">등록된 스케줄이 없습니다.</div>
+        {% endif %}
+    </section>
+
+    <section class="form-card">
+        <h2 class="section-title">대기 중 신청</h2>
+
+        {% if pending_requests %}
+            <div class="admin-application-list">
+                {% for app in pending_requests %}
+                    <div class="admin-application-card">
+                        <div class="admin-application-main">
+                            <div class="admin-app-user">{{ app.user_name or app.user_email }}</div>
+                            <div class="admin-app-email">{{ app.user_email }}</div>
+
+                            {% if app.event %}
+                                <div class="admin-app-event">
+                                    {{ app.event.date }} {{ app.event.start_time }} / {{ app.event.title }}
+                                </div>
+                            {% else %}
+                                <div class="admin-app-event missing">연결된 스케줄 정보를 찾을 수 없습니다.</div>
+                            {% endif %}
+                        </div>
+
+                        <div class="admin-app-actions">
+                            <form method="post"
+                                  action="/admin/approve/{{ app.id }}"
+                                  onsubmit="return confirm('이 신청을 승인하시겠습니까?');">
+                                <button type="submit" class="btn">승인</button>
+                            </form>
+
+                            <form method="post"
+                                  action="/admin/reject/{{ app.id }}"
+                                  onsubmit="return confirm('이 신청을 거절하시겠습니까?');">
+                                <button type="submit" class="btn btn-outline">거절</button>
+                            </form>
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
+        {% else %}
+            <div class="empty-box">대기 중인 신청이 없습니다.</div>
+        {% endif %}
+    </section>
+</section>
+{% endblock %}

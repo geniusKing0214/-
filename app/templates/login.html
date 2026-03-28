@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+
+{% block title %}구글 로그인 | HAN Scheduler{% endblock %}
+
+{% block head %}
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+  import { getAuth, GoogleAuthProvider, signInWithPopup } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+
+  const firebaseConfig = {
+    apiKey: "{{ firebase_api_key }}",
+    authDomain: "{{ firebase_auth_domain }}",
+    projectId: "{{ firebase_project_id }}",
+    storageBucket: "{{ firebase_storage_bucket }}",
+    messagingSenderId: "{{ firebase_messaging_sender_id }}",
+    appId: "{{ firebase_app_id }}"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const auth = getAuth(app);
+  const provider = new GoogleAuthProvider();
+
+  window.loginWithGoogle = async function () {
+    const msg = document.getElementById("login-msg");
+    msg.textContent = "";
+
+    try {
+      const result = await signInWithPopup(auth, provider);
+      const idToken = await result.user.getIdToken();
+
+      const res = await fetch("/session/login", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ idToken })
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.detail || "세션 로그인 처리에 실패했습니다.");
+      }
+
+      window.location.href = "/";
+    } catch (err) {
+      console.error(err);
+      msg.textContent = err.message || "구글 로그인 중 오류가 발생했습니다.";
+    }
+  };
+</script>
+{% endblock %}
+
+{% block content %}
+<section class="auth-wrap">
+  <div class="auth-card">
+    <div class="auth-badge">GOOGLE AUTH</div>
+    <h1 class="page-title">로그인</h1>
+    <p class="page-desc">
+      구글 계정으로 간편하게 로그인하세요.<br>
+      관리자 계정 여부는 등록된 이메일 기준으로 자동 판별됩니다.
+    </p>
+
+    <button type="button" class="btn auth-btn" onclick="loginWithGoogle()">
+      구글 로그인
+    </button>
+
+    <div id="login-msg" class="login-msg"></div>
+  </div>
+</section>
+{% endblock %}

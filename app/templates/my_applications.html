@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block content %}
+
+<h1 class="page-title">내 신청내역</h1>
+
+<div class="table-wrap">
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>이벤트</th>
+                <th>날짜</th>
+                <th>슬롯</th>
+                <th>상태</th>
+                <th>신청일</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for app in applications %}
+            <tr>
+                <td>{{ app.event.title }}</td>
+                <td>{{ app.event.event_date.strftime("%Y-%m-%d") }}</td>
+                <td>{{ app.slot.start_time.strftime("%H:%M") }}</td>
+                <td>
+                    {% if app.status == "pending" %}
+                        <span class="status pending">대기중</span>
+                    {% elif app.status == "approved" %}
+                        <span class="status approved">승인</span>
+                    {% else %}
+                        <span class="status rejected">거절</span>
+                    {% endif %}
+                </td>
+                <td>{{ app.created_at.strftime("%Y-%m-%d %H:%M") }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+{% endblock %}

@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}HAN Scheduler{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', path='css/style.css') }}?v=authfix20260328">
+    {% block head %}{% endblock %}
+</head>
+<body>
+    <header class="site-header">
+        <div class="container topbar">
+            <a href="/" class="brand">HAN Scheduler</a>
+
+            <nav class="topnav">
+                <a href="/">메인</a>
+                {% if is_admin %}
+                    <a href="/admin">관리자</a>
+                    <a href="/admin/create">스케줄 생성</a>
+                {% endif %}
+            </nav>
+
+            <div class="auth-box">
+                {% if user and user.email %}
+                    <span class="user-badge">{{ user.name or user.email }}</span>
+                    <a class="btn btn-outline" href="/logout">로그아웃</a>
+                {% else %}
+                    <a class="btn btn-outline" href="/register">회원가입</a>
+                    <a class="btn" href="/login">구글 로그인</a>
+                {% endif %}
+            </div>
+        </div>
+    </header>
+
+    <main class="page">
+        <div class="container">
+            {% block content %}{% endblock %}
+        </div>
+    </main>
+
+    {% block scripts %}{% endblock %}
+</body>
+</html>
