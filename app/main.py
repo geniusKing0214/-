@@ -20,6 +20,9 @@ from app.firestore_service import (
     apply_to_event,
     approve_application,
     reject_application,
+    enrich_events_with_stats,
+    get_unread_notifications,
+    mark_notification_as_read,
 )
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -181,6 +184,12 @@ async def index(
         print("get_user_applications error:", e)
         user_applications = []
 
+    try:
+        unread_notifications = get_unread_notifications(user_email) if user_email else []
+    except Exception as e:
+        print("get_unread_notifications error:", e)
+        unread_notifications = []
+
     if not selected_date:
         if year == today.year and month == today.month:
             selected_date = today.isoformat()
@@ -220,6 +229,7 @@ async def index(
             "weekdays": ["일", "월", "화", "수", "목", "금", "토"],
             "selected_date": selected_date,
             "selected_events": selected_events,
+            "unread_notifications": unread_notifications,
             **nav,
         },
     )
@@ -300,6 +310,21 @@ async def apply_schedule(request: Request, event_id: str):
     return RedirectResponse(url=referer, status_code=303)
 
 
+@app.post("/notification/read/{application_id}")
+async def read_notification(request: Request, application_id: str):
+    user = get_current_user(request)
+    if not user["email"]:
+        return RedirectResponse(url="/login", status_code=303)
+
+    try:
+        mark_notification_as_read(application_id)
+    except Exception as e:
+        print("mark_notification_as_read error:", e)
+
+    referer = request.headers.get("referer", "/")
+    return RedirectResponse(url=referer, status_code=303)
+
+
 @app.get("/admin", response_class=HTMLResponse)
 async def admin_page(request: Request, year: int | None = None, month: int | None = None):
     user, redirect_response = require_admin_or_redirect(request)
@@ -312,6 +337,7 @@ async def admin_page(request: Request, year: int | None = None, month: int | Non
 
     try:
         events = get_events_by_month(year, month)
+        events = enrich_events_with_stats(events)
     except Exception as e:
         print("admin get_events_by_month error:", e)
         events = []

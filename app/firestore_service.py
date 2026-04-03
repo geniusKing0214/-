@@ -74,7 +74,24 @@ def get_user_applications(user_email: str):
         .where(filter=FieldFilter("user_email", "==", user_email))
         .stream()
     )
-    return [_doc_to_dict(doc) for doc in docs]
+
+    result = []
+    for doc in docs:
+        item = _doc_to_dict(doc)
+        event_id = item.get("event_id")
+        item["event"] = None
+
+        if event_id:
+            event_doc = db.collection(EVENTS_COLLECTION).document(event_id).get()
+            if event_doc.exists:
+                event_item = _doc_to_dict(event_doc)
+                event_item.setdefault("color", "#2563eb")
+                event_item.setdefault("note", "")
+                item["event"] = event_item
+
+        result.append(item)
+
+    return result
 
 
 def apply_to_event(event_id: str, user_email: str, user_name: str):
@@ -94,6 +111,8 @@ def apply_to_event(event_id: str, user_email: str, user_name: str):
         "user_email": user_email,
         "user_name": user_name,
         "status": "pending",
+        "notification_read": True,
+        "notification_message": "",
     }
 
     ref = db.collection(APPLICATIONS_COLLECTION).document()
@@ -102,14 +121,50 @@ def apply_to_event(event_id: str, user_email: str, user_name: str):
 
 
 def approve_application(application_id: str):
-    db.collection(APPLICATIONS_COLLECTION).document(application_id).update({
-        "status": "approved"
+    app_ref = db.collection(APPLICATIONS_COLLECTION).document(application_id)
+    app_doc = app_ref.get()
+
+    if not app_doc.exists:
+        return
+
+    app_data = app_doc.to_dict() or {}
+    event_title = "신청한 일정"
+    event_id = app_data.get("event_id")
+
+    if event_id:
+        event_doc = db.collection(EVENTS_COLLECTION).document(event_id).get()
+        if event_doc.exists:
+            event_data = event_doc.to_dict() or {}
+            event_title = event_data.get("title") or event_title
+
+    app_ref.update({
+        "status": "approved",
+        "notification_read": False,
+        "notification_message": f"'{event_title}' 일정이 승인되었습니다.",
     })
 
 
 def reject_application(application_id: str):
-    db.collection(APPLICATIONS_COLLECTION).document(application_id).update({
-        "status": "rejected"
+    app_ref = db.collection(APPLICATIONS_COLLECTION).document(application_id)
+    app_doc = app_ref.get()
+
+    if not app_doc.exists:
+        return
+
+    app_data = app_doc.to_dict() or {}
+    event_title = "신청한 일정"
+    event_id = app_data.get("event_id")
+
+    if event_id:
+        event_doc = db.collection(EVENTS_COLLECTION).document(event_id).get()
+        if event_doc.exists:
+            event_data = event_doc.to_dict() or {}
+            event_title = event_data.get("title") or event_title
+
+    app_ref.update({
+        "status": "rejected",
+        "notification_read": False,
+        "notification_message": f"'{event_title}' 일정이 거절되었습니다.",
     })
 
 
@@ -137,3 +192,83 @@ def get_pending_requests():
         result.append(item)
 
     return result
+
+
+def get_event_application_stats(event_id: str):
+    docs = (
+        db.collection(APPLICATIONS_COLLECTION)
+        .where(filter=FieldFilter("event_id", "==", event_id))
+        .stream()
+    )
+
+    pending = 0
+    approved = 0
+    rejected = 0
+    applicants = []
+
+    for doc in docs:
+        item = _doc_to_dict(doc)
+        status = item.get("status", "pending")
+
+        if status == "approved":
+            approved += 1
+        elif status == "rejected":
+            rejected += 1
+        else:
+            pending += 1
+
+        applicants.append(item)
+
+    return {
+        "pending_count": pending,
+        "approved_count": approved,
+        "rejected_count": rejected,
+        "total_count": pending + approved + rejected,
+        "applicants": applicants,
+    }
+
+
+def enrich_events_with_stats(events: list):
+    enriched = []
+
+    for event in events:
+        stats = get_event_application_stats(event["id"])
+        enriched.append({
+            **event,
+            **stats,
+        })
+
+    return enriched
+
+
+def get_unread_notifications(user_email: str):
+    if not user_email:
+        return []
+
+    docs = (
+        db.collection(APPLICATIONS_COLLECTION)
+        .where(filter=FieldFilter("user_email", "==", user_email))
+        .where(filter=FieldFilter("notification_read", "==", False))
+        .stream()
+    )
+
+    result = []
+    for doc in docs:
+        item = _doc_to_dict(doc)
+        event_id = item.get("event_id")
+        item["event"] = None
+
+        if event_id:
+            event_doc = db.collection(EVENTS_COLLECTION).document(event_id).get()
+            if event_doc.exists:
+                item["event"] = _doc_to_dict(event_doc)
+
+        result.append(item)
+
+    return result
+
+
+def mark_notification_as_read(application_id: str):
+    db.collection(APPLICATIONS_COLLECTION).document(application_id).update({
+        "notification_read": True
+    })

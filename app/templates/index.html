@@ -4,6 +4,33 @@
 
 {% block content %}
 <section class="calendar-page">
+
+    {% if unread_notifications %}
+        <div class="form-card" style="border: 1px solid #bfdbfe; background: #eff6ff;">
+            <h2 class="section-title" style="margin-bottom: 12px;">알림</h2>
+
+            <div style="display: flex; flex-direction: column; gap: 12px;">
+                {% for notice in unread_notifications %}
+                    <div style="border: 1px solid #bfdbfe; background: #ffffff; border-radius: 14px; padding: 16px;">
+                        <div style="font-weight: 800; margin-bottom: 8px;">
+                            {{ notice.notification_message or "새 알림이 있습니다." }}
+                        </div>
+
+                        {% if notice.event %}
+                            <div style="font-size: 14px; color: #4b5563; margin-bottom: 12px;">
+                                {{ notice.event.date }} {{ notice.event.start_time }} / {{ notice.event.title }}
+                            </div>
+                        {% endif %}
+
+                        <form method="post" action="/notification/read/{{ notice.id }}">
+                            <button type="submit" class="btn btn-xs">확인</button>
+                        </form>
+                    </div>
+                {% endfor %}
+            </div>
+        </div>
+    {% endif %}
+
     <div class="calendar-toolbar">
         <div class="calendar-nav">
             <a class="btn btn-outline" href="/?year={{ prev_year }}&month={{ prev_month }}&selected_date={{ selected_date }}">◀ 이전달</a>
