@@ -2,74 +2,71 @@
 
 {% block title %}회원가입 | HAN Scheduler{% endblock %}
 
-{% block head %}
-<script type="module">
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-  import { getAuth, GoogleAuthProvider, signInWithPopup } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-
-  const firebaseConfig = {
-    apiKey: "{{ firebase_api_key }}",
-    authDomain: "{{ firebase_auth_domain }}",
-    projectId: "{{ firebase_project_id }}",
-    storageBucket: "{{ firebase_storage_bucket }}",
-    messagingSenderId: "{{ firebase_messaging_sender_id }}",
-    appId: "{{ firebase_app_id }}"
-  };
-
-  const app = initializeApp(firebaseConfig);
-  const auth = getAuth(app);
-  const provider = new GoogleAuthProvider();
-
-  window.registerWithGoogle = async function () {
-    const msg = document.getElementById("login-msg");
-    msg.textContent = "";
-
-    try {
-      const result = await signInWithPopup(auth, provider);
-      const idToken = await result.user.getIdToken();
-
-      const res = await fetch("/session/login", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({ idToken })
-      });
-
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.detail || "회원가입 처리에 실패했습니다.");
-      }
-
-      window.location.href = "/";
-    } catch (err) {
-      console.error(err);
-      msg.textContent = err.message || "구글 회원가입 중 오류가 발생했습니다.";
-    }
-  };
-</script>
-{% endblock %}
-
 {% block content %}
 <section class="auth-wrap">
-  <div class="auth-card">
-    <div class="auth-badge">GOOGLE SIGN UP</div>
-    <h1 class="page-title">회원가입</h1>
-    <p class="page-desc">
-      별도 아이디/비밀번호 없이<br>
-      구글 계정으로 바로 가입하고 로그인합니다.
-    </p>
+    <div class="auth-card">
+        <span class="auth-badge">REGISTER</span>
+        <h1 class="page-title">구글 계정으로 시작하기</h1>
+        <p class="page-desc">
+            별도 아이디/비밀번호 없이 구글 계정으로 바로 시작합니다.
+        </p>
 
-    <button type="button" class="btn auth-btn" onclick="registerWithGoogle()">
-      구글 계정으로 회원가입
-    </button>
+        <button id="googleRegisterBtn" class="btn auth-btn" type="button">구글 계정으로 시작</button>
+        <div id="registerMsg" class="login-msg"></div>
 
-    <div class="auth-divider"></div>
+        <div class="auth-divider"></div>
 
-    <p class="auth-subtext">이미 계정이 있다면 바로 로그인하세요.</p>
-    <a href="/login" class="btn btn-outline auth-link-btn">로그인 페이지로 이동</a>
-
-    <div id="login-msg" class="login-msg"></div>
-  </div>
+        <p class="auth-subtext">이미 계정이 있다면 로그인 화면으로 이동하세요.</p>
+        <a class="btn btn-outline auth-link-btn" href="/login">로그인으로 이동</a>
+    </div>
 </section>
+{% endblock %}
+
+{% block scripts %}
+<script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+    import { getAuth, GoogleAuthProvider, signInWithPopup } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+
+    const firebaseConfig = {
+        apiKey: "{{ firebase_api_key }}",
+        authDomain: "{{ firebase_auth_domain }}",
+        projectId: "{{ firebase_project_id }}",
+        storageBucket: "{{ firebase_storage_bucket }}",
+        messagingSenderId: "{{ firebase_messaging_sender_id }}",
+        appId: "{{ firebase_app_id }}"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const provider = new GoogleAuthProvider();
+
+    const registerBtn = document.getElementById("googleRegisterBtn");
+    const registerMsg = document.getElementById("registerMsg");
+
+    registerBtn.addEventListener("click", async () => {
+        registerMsg.textContent = "";
+
+        try {
+            const result = await signInWithPopup(auth, provider);
+            const idToken = await result.user.getIdToken();
+
+            const response = await fetch("/session/login", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({ idToken })
+            });
+
+            if (!response.ok) {
+                throw new Error("서버 세션 생성에 실패했습니다.");
+            }
+
+            window.location.href = "/";
+        } catch (error) {
+            console.error(error);
+            registerMsg.textContent = "회원가입 처리 중 오류가 발생했습니다. 다시 시도해주세요.";
+        }
+    });
+</script>
 {% endblock %}

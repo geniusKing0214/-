@@ -15,8 +15,24 @@ a {
     color: inherit;
 }
 
-button, input, textarea {
+button,
+input,
+textarea {
     font: inherit;
+}
+
+input,
+textarea {
+    width: 100%;
+    border: 1px solid #d1d5db;
+    border-radius: 12px;
+    padding: 12px 14px;
+    background: #ffffff;
+    color: #111827;
+}
+
+textarea {
+    resize: vertical;
 }
 
 .container {
@@ -98,6 +114,7 @@ button, input, textarea {
     color: #ffffff;
     cursor: pointer;
     font-weight: 700;
+    transition: 0.15s ease;
 }
 
 .btn:hover {
@@ -116,9 +133,9 @@ button, input, textarea {
 }
 
 .btn-xs {
-    min-height: 32px;
-    padding: 0 10px;
-    border-radius: 8px;
+    min-height: 34px;
+    padding: 0 12px;
+    border-radius: 10px;
     font-size: 13px;
 }
 
@@ -126,12 +143,31 @@ button, input, textarea {
     margin: 0 0 8px;
     font-size: 28px;
     font-weight: 800;
+    color: #111827;
 }
 
 .page-desc {
-    margin: 0 0 20px;
+    margin: 0;
     color: #6b7280;
     line-height: 1.6;
+}
+
+.section-title {
+    margin: 0 0 18px;
+    font-size: 20px;
+    font-weight: 800;
+}
+
+.form-card {
+    background: #ffffff;
+    border: 1px solid #e5e7eb;
+    border-radius: 20px;
+    padding: 24px;
+    box-shadow: 0 8px 30px rgba(15, 23, 42, 0.05);
+}
+
+.form-card-lg {
+    padding: 28px;
 }
 
 .calendar-page {
@@ -166,6 +202,128 @@ button, input, textarea {
     font-weight: 800;
 }
 
+.calendar-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 360px;
+    gap: 20px;
+    align-items: start;
+}
+
+.calendar-main {
+    min-width: 0;
+}
+
+.calendar-side {
+    display: block;
+    background: #ffffff;
+    border: 1px solid #e5e7eb;
+    border-radius: 20px;
+    padding: 20px;
+    box-shadow: 0 8px 30px rgba(15, 23, 42, 0.05);
+    position: sticky;
+    top: 96px;
+}
+
+.side-header {
+    margin-bottom: 16px;
+}
+
+.side-title {
+    margin: 0 0 8px;
+    font-size: 22px;
+    font-weight: 800;
+}
+
+.side-desc {
+    margin: 0;
+    color: #6b7280;
+    line-height: 1.5;
+    font-size: 14px;
+}
+
+.side-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.side-event-card {
+    border: 1px solid #e5e7eb;
+    border-radius: 16px;
+    padding: 16px;
+    background: #fbfdff;
+}
+
+.side-event-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+.side-event-time {
+    font-size: 13px;
+    font-weight: 800;
+    color: #2563eb;
+}
+
+.side-event-capacity {
+    font-size: 12px;
+    color: #6b7280;
+}
+
+.side-event-title {
+    font-size: 16px;
+    font-weight: 800;
+    margin-bottom: 8px;
+    line-height: 1.4;
+}
+
+.side-event-desc {
+    font-size: 14px;
+    color: #4b5563;
+    line-height: 1.5;
+    margin-bottom: 10px;
+}
+
+.side-event-note {
+    background: #f8fafc;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    padding: 12px;
+    margin-bottom: 12px;
+}
+
+.side-event-note strong {
+    display: block;
+    margin-bottom: 6px;
+    font-size: 13px;
+}
+
+.side-event-note p {
+    margin: 0;
+    color: #4b5563;
+    line-height: 1.5;
+    font-size: 14px;
+}
+
+.side-event-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.empty-side-box,
+.empty-box {
+    padding: 18px;
+    border-radius: 14px;
+    background: #f8fafc;
+    color: #6b7280;
+    border: 1px dashed #d1d5db;
+    text-align: center;
+}
+
 .calendar-card {
     background: #ffffff;
     border: 1px solid #e5e7eb;
@@ -194,8 +352,13 @@ button, input, textarea {
     grid-template-columns: repeat(7, minmax(0, 1fr));
 }
 
+.calendar-cell-link {
+    color: inherit;
+    display: block;
+}
+
 .calendar-cell {
-    min-height: 170px;
+    height: 170px;
     padding: 10px;
     border-right: 1px solid #e5e7eb;
     border-bottom: 1px solid #e5e7eb;
@@ -203,6 +366,13 @@ button, input, textarea {
     display: flex;
     flex-direction: column;
     gap: 10px;
+    transition: 0.15s ease;
+    overflow: hidden;
+}
+
+
+.calendar-cell:hover {
+    background: #f9fbff;
 }
 
 .calendar-cell:nth-child(7n) {
@@ -218,6 +388,10 @@ button, input, textarea {
     background: #eff6ff;
     outline: 2px solid #60a5fa;
     outline-offset: -2px;
+}
+
+.is-selected {
+    box-shadow: inset 0 0 0 2px #2563eb;
 }
 
 .has-events .day-number {
@@ -249,6 +423,11 @@ button, input, textarea {
     display: flex;
     flex-direction: column;
     gap: 8px;
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding-right: 4px;
 }
 
 .empty-slot {
@@ -302,33 +481,6 @@ button, input, textarea {
     word-break: break-word;
 }
 
-.event-desc {
-    font-size: 12px;
-    color: #6b7280;
-    line-height: 1.4;
-}
-
-.event-actions {
-    display: flex;
-    gap: 6px;
-    flex-wrap: wrap;
-}
-
-.status-pill {
-    display: inline-flex;
-    align-items: center;
-    min-height: 32px;
-    padding: 0 10px;
-    border-radius: 999px;
-    font-size: 12px;
-    font-weight: 800;
-}
-
-.status-pill.success {
-    background: #dcfce7;
-    color: #166534;
-}
-
 .legend {
     display: flex;
     gap: 16px;
@@ -358,25 +510,202 @@ button, input, textarea {
     background: #22c55e;
 }
 
-.form-card {
-    background: #ffffff;
+.status-pill {
+    display: inline-flex;
+    align-items: center;
+    min-height: 32px;
+    padding: 0 10px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 800;
+}
+
+.status-pill.success {
+    background: #dcfce7;
+    color: #166534;
+}
+
+.admin-page {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.admin-toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 16px;
+    flex-wrap: wrap;
+}
+
+.admin-toolbar-actions {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.admin-event-list,
+.admin-application-list {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.admin-event-card,
+.admin-application-card {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 16px;
+    padding: 18px;
     border: 1px solid #e5e7eb;
-    border-radius: 18px;
-    padding: 24px;
+    border-radius: 16px;
+    background: #fbfdff;
+}
+
+.admin-event-main,
+.admin-application-main {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-width: 0;
+}
+
+.admin-event-date {
+    font-size: 13px;
+    font-weight: 800;
+    color: #2563eb;
+}
+
+.admin-event-title {
+    font-size: 18px;
+    font-weight: 800;
+    color: #111827;
+}
+
+.admin-event-desc {
+    font-size: 14px;
+    color: #4b5563;
+    line-height: 1.5;
+}
+
+.admin-event-meta {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    font-size: 13px;
+    color: #6b7280;
+}
+
+.admin-event-note {
+    background: #f8fafc;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    padding: 12px;
+}
+
+.admin-event-note strong {
+    display: block;
+    margin-bottom: 6px;
+    font-size: 13px;
+}
+
+.admin-event-note p {
+    margin: 0;
+    line-height: 1.5;
+    color: #4b5563;
+}
+
+.admin-app-user {
+    font-size: 16px;
+    font-weight: 800;
+}
+
+.admin-app-email {
+    font-size: 14px;
+    color: #6b7280;
+}
+
+.admin-app-event {
+    font-size: 14px;
+    color: #374151;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.admin-app-event.missing {
+    color: #dc2626;
+}
+
+.admin-app-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.event-color-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 999px;
+    display: inline-block;
 }
 
 .form-grid {
-    display: grid;
-    gap: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
 }
 
-.form-grid input,
-.form-grid textarea {
-    width: 100%;
-    border: 1px solid #d1d5db;
+.form-row {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 16px;
+}
+
+.form-row-2 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.form-group label {
+    font-size: 14px;
+    font-weight: 700;
+    color: #374151;
+}
+
+.form-actions {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    padding-top: 8px;
+}
+
+.color-field {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.color-field input[type="color"] {
+    width: 72px;
+    min-width: 72px;
+    height: 46px;
+    padding: 4px;
     border-radius: 12px;
-    padding: 12px 14px;
-    background: #fff;
+    cursor: pointer;
+}
+
+.field-help {
+    font-size: 13px;
+    color: #6b7280;
 }
 
 .auth-wrap {
@@ -431,63 +760,14 @@ button, input, textarea {
     color: #dc2626;
 }
 
-.admin-toolbar,
-.admin-event-card,
-.admin-application-card {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 16px;
-}
+@media (max-width: 1100px) {
+    .calendar-layout {
+        grid-template-columns: 1fr;
+    }
 
-.admin-page {
-    display: flex;
-    flex-direction: column;
-    gap: 20px;
-}
-
-.admin-event-list,
-.admin-application-list {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-}
-
-.admin-event-card,
-.admin-application-card {
-    border: 1px solid #e5e7eb;
-    border-radius: 14px;
-    padding: 16px;
-    background: #fff;
-}
-
-.admin-event-title,
-.admin-app-user {
-    font-weight: 800;
-}
-
-.admin-event-date,
-.admin-app-email,
-.admin-app-event,
-.admin-event-desc,
-.admin-event-meta {
-    color: #6b7280;
-    font-size: 14px;
-}
-
-.admin-app-actions {
-    display: flex;
-    gap: 8px;
-    flex-wrap: wrap;
-}
-
-.empty-box {
-    padding: 18px;
-    text-align: center;
-    border: 1px dashed #d1d5db;
-    border-radius: 14px;
-    color: #6b7280;
-    background: #fafafa;
+    .calendar-side {
+        position: static;
+    }
 }
 
 @media (max-width: 768px) {
@@ -508,11 +788,14 @@ button, input, textarea {
         font-size: 22px;
     }
 
-    .admin-toolbar,
+    .form-row,
+    .form-row-2 {
+        grid-template-columns: 1fr;
+    }
+
     .admin-event-card,
     .admin-application-card {
         flex-direction: column;
-        align-items: stretch;
     }
 }
 

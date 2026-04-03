@@ -1,31 +1,50 @@
 {% extends "base.html" %}
 
-{% block title %}관리자 | 스케줄러{% endblock %}
+{% block title %}관리자 | HAN Scheduler{% endblock %}
 
 {% block content %}
 <section class="admin-page">
     <div class="admin-toolbar">
         <div>
             <h1 class="page-title">관리자 페이지</h1>
-            <p class="page-desc">스케줄 생성, 삭제, 신청 승인/거절을 관리합니다.</p>
+            <p class="page-desc">스케줄 생성, 삭제, 신청 승인과 거절을 관리합니다.</p>
         </div>
-        <a href="/admin/create" class="btn">스케줄 생성</a>
+
+        <div class="admin-toolbar-actions">
+            <a class="btn btn-outline" href="/admin?year={{ prev_year }}&month={{ prev_month }}">◀ 이전달</a>
+            <a class="btn" href="/admin/create">스케줄 생성</a>
+            <a class="btn btn-outline" href="/admin?year={{ next_year }}&month={{ next_month }}">다음달 ▶</a>
+        </div>
     </div>
 
     <section class="form-card">
-        <h2 class="section-title">이번 달 스케줄</h2>
+        <h2 class="section-title">{{ month_label }} 스케줄</h2>
 
         {% if events %}
             <div class="admin-event-list">
                 {% for event in events %}
-                    <div class="admin-event-card">
+                    <div class="admin-event-card" style="border-left: 6px solid {{ event.color or '#2563eb' }}">
                         <div class="admin-event-main">
                             <div class="admin-event-date">{{ event.date }} {{ event.start_time }}</div>
                             <div class="admin-event-title">{{ event.title }}</div>
+
                             {% if event.description %}
                                 <div class="admin-event-desc">{{ event.description }}</div>
                             {% endif %}
-                            <div class="admin-event-meta">정원: {{ event.capacity }}</div>
+
+                            <div class="admin-event-meta">
+                                <span>정원: {{ event.capacity }}</span>
+                                {% if event.note %}
+                                    <span>특이사항 있음</span>
+                                {% endif %}
+                            </div>
+
+                            {% if event.note %}
+                                <div class="admin-event-note">
+                                    <strong>특이사항</strong>
+                                    <p>{{ event.note }}</p>
+                                </div>
+                            {% endif %}
                         </div>
 
                         <form method="post"
@@ -54,6 +73,7 @@
 
                             {% if app.event %}
                                 <div class="admin-app-event">
+                                    <span class="event-color-dot" style="background: {{ app.event.color or '#2563eb' }}"></span>
                                     {{ app.event.date }} {{ app.event.start_time }} / {{ app.event.title }}
                                 </div>
                             {% else %}

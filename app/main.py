@@ -56,18 +56,33 @@ def firebase_context():
     }
 
 
+def normalize_email(email: str | None) -> str | None:
+    if not email:
+        return None
+    return email.strip().lower()
+
+
 def get_current_user(request: Request):
+    email = normalize_email(request.session.get("user_email"))
     return {
-        "email": request.session.get("user_email"),
+        "email": email,
         "name": request.session.get("user_name"),
         "picture": request.session.get("user_picture"),
     }
 
 
 def is_admin(email: str | None) -> bool:
-    if not email:
+    normalized = normalize_email(email)
+    if not normalized:
         return False
-    return email.lower().strip() in ADMIN_EMAILS
+    return normalized in ADMIN_EMAILS
+
+
+def require_admin_or_redirect(request: Request):
+    user = get_current_user(request)
+    if not is_admin(user["email"]):
+        return None, RedirectResponse(url="/", status_code=303)
+    return user, None
 
 
 def build_month_matrix(year: int, month: int, events: list, user_applications: list):
@@ -82,7 +97,7 @@ def build_month_matrix(year: int, month: int, events: list, user_applications: l
         event_map.setdefault(event_date, []).append(event)
 
     applied_event_ids = {
-        app_item["event_id"]
+        app_item.get("event_id")
         for app_item in user_applications
         if app_item.get("status") != "rejected"
     }
@@ -96,19 +111,24 @@ def build_month_matrix(year: int, month: int, events: list, user_applications: l
             day_str = day.isoformat()
             day_events = event_map.get(day_str, [])
 
+            day_events_sorted = sorted(
+                day_events,
+                key=lambda x: (x.get("start_time", ""), x.get("title", ""))
+            )
+
             row.append({
                 "date": day,
                 "date_str": day_str,
                 "day_num": day.day,
                 "is_current_month": day.month == month,
                 "is_today": day_str == today_str,
-                "has_events": len(day_events) > 0,
+                "has_events": len(day_events_sorted) > 0,
                 "events": [
                     {
                         **event,
                         "is_applied": event.get("id") in applied_event_ids
                     }
-                    for event in day_events
+                    for event in day_events_sorted
                 ]
             })
         weeks.append(row)
@@ -136,7 +156,12 @@ def month_nav(year: int, month: int):
 
 
 @app.get("/", response_class=HTMLResponse)
-async def index(request: Request, year: int | None = None, month: int | None = None):
+async def index(
+    request: Request,
+    year: int | None = None,
+    month: int | None = None,
+    selected_date: str | None = None,
+):
     today = date.today()
     year = year or today.year
     month = month or today.month
@@ -144,8 +169,40 @@ async def index(request: Request, year: int | None = None, month: int | None = N
     user = get_current_user(request)
     user_email = user["email"]
 
-    events = get_events_by_month(year, month)
-    user_applications = get_user_applications(user_email) if user_email else []
+    try:
+        events = get_events_by_month(year, month)
+    except Exception as e:
+        print("get_events_by_month error:", e)
+        events = []
+
+    try:
+        user_applications = get_user_applications(user_email) if user_email else []
+    except Exception as e:
+        print("get_user_applications error:", e)
+        user_applications = []
+
+    if not selected_date:
+        if year == today.year and month == today.month:
+            selected_date = today.isoformat()
+        else:
+            event_dates = [event.get("date") for event in events if event.get("date")]
+            selected_date = event_dates[0] if event_dates else f"{year:04d}-{month:02d}-01"
+
+    applied_ids = {
+        app_item.get("event_id")
+        for app_item in user_applications
+        if app_item.get("status") != "rejected"
+    }
+
+    selected_events = [
+        {
+            **event,
+            "is_applied": event.get("id") in applied_ids
+        }
+        for event in events
+        if event.get("date") == selected_date
+    ]
+    selected_events.sort(key=lambda x: (x.get("start_time", ""), x.get("title", "")))
 
     weeks = build_month_matrix(year, month, events, user_applications)
     nav = month_nav(year, month)
@@ -161,6 +218,8 @@ async def index(request: Request, year: int | None = None, month: int | None = N
             "month_label": f"{year}년 {month}월",
             "weeks": weeks,
             "weekdays": ["일", "월", "화", "수", "목", "금", "토"],
+            "selected_date": selected_date,
+            "selected_events": selected_events,
             **nav,
         },
     )
@@ -202,7 +261,7 @@ async def session_login(request: Request):
         raise HTTPException(status_code=400, detail="Missing idToken")
 
     decoded = verify_firebase_token(id_token)
-    email = decoded.get("email")
+    email = normalize_email(decoded.get("email"))
     name = decoded.get("name", "")
     picture = decoded.get("picture", "")
 
@@ -228,26 +287,42 @@ async def apply_schedule(request: Request, event_id: str):
     if not user["email"]:
         return RedirectResponse(url="/login", status_code=303)
 
-    apply_to_event(
-        event_id=event_id,
-        user_email=user["email"],
-        user_name=user["name"] or ""
-    )
-    return RedirectResponse(url=request.headers.get("referer", "/"), status_code=303)
+    try:
+        apply_to_event(
+            event_id=event_id,
+            user_email=user["email"],
+            user_name=user["name"] or ""
+        )
+    except Exception as e:
+        print("apply_to_event error:", e)
+
+    referer = request.headers.get("referer", "/")
+    return RedirectResponse(url=referer, status_code=303)
 
 
 @app.get("/admin", response_class=HTMLResponse)
 async def admin_page(request: Request, year: int | None = None, month: int | None = None):
-    user = get_current_user(request)
-    if not is_admin(user["email"]):
-        raise HTTPException(status_code=403, detail="관리자만 접근할 수 있습니다.")
+    user, redirect_response = require_admin_or_redirect(request)
+    if redirect_response:
+        return redirect_response
 
     today = date.today()
     year = year or today.year
     month = month or today.month
 
-    events = get_events_by_month(year, month)
-    pending_requests = get_pending_requests()
+    try:
+        events = get_events_by_month(year, month)
+    except Exception as e:
+        print("admin get_events_by_month error:", e)
+        events = []
+
+    try:
+        pending_requests = get_pending_requests()
+    except Exception as e:
+        print("get_pending_requests error:", e)
+        pending_requests = []
+
+    nav = month_nav(year, month)
 
     return templates.TemplateResponse(
         "admin.html",
@@ -257,17 +332,19 @@ async def admin_page(request: Request, year: int | None = None, month: int | Non
             "is_admin": True,
             "year": year,
             "month": month,
+            "month_label": f"{year}년 {month}월",
             "events": events,
             "pending_requests": pending_requests,
+            **nav,
         },
     )
 
 
 @app.get("/admin/create", response_class=HTMLResponse)
 async def create_event_page(request: Request):
-    user = get_current_user(request)
-    if not is_admin(user["email"]):
-        raise HTTPException(status_code=403, detail="관리자만 접근할 수 있습니다.")
+    user, redirect_response = require_admin_or_redirect(request)
+    if redirect_response:
+        return redirect_response
 
     return templates.TemplateResponse(
         "create_event.html",
@@ -287,50 +364,70 @@ async def create_event_submit(
     start_time: str = Form(...),
     capacity: int = Form(...),
     description: str = Form(""),
+    color: str = Form("#2563eb"),
+    note: str = Form(""),
 ):
-    user = get_current_user(request)
-    if not is_admin(user["email"]):
-        raise HTTPException(status_code=403, detail="관리자만 접근할 수 있습니다.")
+    user, redirect_response = require_admin_or_redirect(request)
+    if redirect_response:
+        return redirect_response
 
-    create_event(
-        {
-            "title": title,
-            "date": date_value,
-            "start_time": start_time,
-            "capacity": capacity,
-            "description": description,
-            "created_by": user["email"],
-            "created_at": datetime.now().isoformat(),
-        }
-    )
+    try:
+        create_event(
+            {
+                "title": title.strip(),
+                "date": date_value,
+                "start_time": start_time,
+                "capacity": capacity,
+                "description": description.strip(),
+                "color": color.strip() or "#2563eb",
+                "note": note.strip(),
+                "created_by": user["email"],
+                "created_at": datetime.now().isoformat(),
+            }
+        )
+    except Exception as e:
+        print("create_event error:", e)
+
     return RedirectResponse(url="/admin", status_code=303)
 
 
 @app.post("/admin/delete/{event_id}")
 async def admin_delete_event(request: Request, event_id: str):
-    user = get_current_user(request)
-    if not is_admin(user["email"]):
-        raise HTTPException(status_code=403, detail="관리자만 접근할 수 있습니다.")
+    user, redirect_response = require_admin_or_redirect(request)
+    if redirect_response:
+        return redirect_response
 
-    delete_event(event_id)
+    try:
+        delete_event(event_id)
+    except Exception as e:
+        print("delete_event error:", e)
+
     return RedirectResponse(url=request.headers.get("referer", "/admin"), status_code=303)
 
 
 @app.post("/admin/approve/{application_id}")
 async def admin_approve_application(request: Request, application_id: str):
-    user = get_current_user(request)
-    if not is_admin(user["email"]):
-        raise HTTPException(status_code=403, detail="관리자만 접근할 수 있습니다.")
+    user, redirect_response = require_admin_or_redirect(request)
+    if redirect_response:
+        return redirect_response
 
-    approve_application(application_id)
+    try:
+        approve_application(application_id)
+    except Exception as e:
+        print("approve_application error:", e)
+
     return RedirectResponse(url="/admin", status_code=303)
 
 
 @app.post("/admin/reject/{application_id}")
 async def admin_reject_application(request: Request, application_id: str):
-    user = get_current_user(request)
-    if not is_admin(user["email"]):
-        raise HTTPException(status_code=403, detail="관리자만 접근할 수 있습니다.")
+    user, redirect_response = require_admin_or_redirect(request)
+    if redirect_response:
+        return redirect_response
 
-    reject_application(application_id)
+    try:
+        reject_application(application_id)
+    except Exception as e:
+        print("reject_application error:", e)
+
     return RedirectResponse(url="/admin", status_code=303)

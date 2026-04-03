@@ -3,32 +3,64 @@
 {% block title %}스케줄 생성 | HAN Scheduler{% endblock %}
 
 {% block content %}
-<section class="auth-wrap">
-    <div class="auth-card" style="max-width: 700px; text-align: left;">
-        <h1 class="page-title">스케줄 생성</h1>
-        <p class="page-desc">관리자가 날짜와 시간을 지정해 스케줄을 생성합니다.</p>
+<section class="admin-page">
+    <div class="admin-toolbar">
+        <div>
+            <h1 class="page-title">스케줄 생성</h1>
+            <p class="page-desc">날짜, 시간, 색상, 특이사항까지 한 번에 등록합니다.</p>
+        </div>
+        <a href="/admin" class="btn btn-outline">관리자 페이지로</a>
+    </div>
 
+    <section class="form-card form-card-lg">
         <form action="/admin/create" method="post" class="form-grid">
-            <label>스케줄 제목</label>
-            <input type="text" name="title" required>
+            <div class="form-group">
+                <label for="title">스케줄 제목</label>
+                <input id="title" type="text" name="title" required placeholder="예: 오후 근무 / 행사 / 미팅">
+            </div>
 
-            <label>날짜</label>
-            <input type="date" name="date_value" required>
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="date_value">날짜</label>
+                    <input id="date_value" type="date" name="date_value" required>
+                </div>
 
-            <label>시작 시간</label>
-            <input type="time" name="start_time" required>
+                <div class="form-group">
+                    <label for="start_time">시작 시간</label>
+                    <input id="start_time" type="time" name="start_time" required>
+                </div>
 
-            <label>정원</label>
-            <input type="number" name="capacity" min="1" required>
+                <div class="form-group">
+                    <label for="capacity">정원</label>
+                    <input id="capacity" type="number" name="capacity" min="1" value="1" required>
+                </div>
+            </div>
 
-            <label>설명</label>
-            <textarea name="description" rows="4" placeholder="스케줄 설명을 입력하세요."></textarea>
+            <div class="form-row form-row-2">
+                <div class="form-group">
+                    <label for="color">색상</label>
+                    <div class="color-field">
+                        <input id="color" type="color" name="color" value="#2563eb">
+                        <span class="field-help">달력과 리스트에서 이 색으로 표시됩니다.</span>
+                    </div>
+                </div>
+            </div>
 
-            <div style="margin-top: 16px;">
-                <button type="submit" class="btn">생성하기</button>
+            <div class="form-group">
+                <label for="description">설명</label>
+                <textarea id="description" name="description" rows="4" placeholder="간단한 설명을 입력하세요."></textarea>
+            </div>
+
+            <div class="form-group">
+                <label for="note">특이사항</label>
+                <textarea id="note" name="note" rows="4" placeholder="복장, 준비물, 주의사항 등 특이사항을 입력하세요."></textarea>
+            </div>
+
+            <div class="form-actions">
+                <button type="submit" class="btn">스케줄 생성</button>
                 <a href="/admin" class="btn btn-outline">취소</a>
             </div>
         </form>
-    </div>
+    </section>
 </section>
 {% endblock %}

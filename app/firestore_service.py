@@ -39,9 +39,11 @@ def get_events_by_month(year: int, month: int):
         item.setdefault("date", "")
         item.setdefault("capacity", 0)
         item.setdefault("description", "")
+        item.setdefault("color", "#2563eb")
+        item.setdefault("note", "")
         result.append(item)
 
-    result.sort(key=lambda x: (x.get("date", ""), x.get("start_time", "")))
+    result.sort(key=lambda x: (x.get("date", ""), x.get("start_time", ""), x.get("title", "")))
     return result
 
 
@@ -127,7 +129,10 @@ def get_pending_requests():
         if event_id:
             event_doc = db.collection(EVENTS_COLLECTION).document(event_id).get()
             if event_doc.exists:
-                item["event"] = _doc_to_dict(event_doc)
+                event_item = _doc_to_dict(event_doc)
+                event_item.setdefault("color", "#2563eb")
+                event_item.setdefault("note", "")
+                item["event"] = event_item
 
         result.append(item)
 

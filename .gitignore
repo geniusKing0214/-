@@ -1,14 +1,9 @@
-# Python
+.venv/
 __pycache__/
 *.pyc
-.venv/
-venv/
 
-# Env / secrets
 .env
 serviceAccountKey.json
 
-# OS / editor
 .vscode/
 .DS_Store
-Thumbs.db
