@@ -7,25 +7,81 @@
     <div class="admin-toolbar">
         <div>
             <h1 class="page-title">관리자 페이지</h1>
-            <p class="page-desc">스케줄 생성, 삭제, 신청 승인과 거절, 이벤트 현황을 관리합니다.</p>
+            <p class="page-desc">달력에서 날짜를 선택하면 해당 날짜 이벤트와 신청 현황이 아래에 표시됩니다.</p>
         </div>
 
         <div class="admin-toolbar-actions">
             <a class="btn btn-outline" href="/admin?year={{ prev_year }}&month={{ prev_month }}">◀ 이전달</a>
-            <a class="btn" href="/admin/create">스케줄 생성</a>
+            <a class="btn" href="/admin/create">이벤트 생성</a>
             <a class="btn btn-outline" href="/admin?year={{ next_year }}&month={{ next_month }}">다음달 ▶</a>
         </div>
     </div>
 
     <section class="form-card">
-        <h2 class="section-title">{{ month_label }} 스케줄 현황</h2>
+        <div class="calendar-toolbar">
+            <div class="calendar-nav">
+                <a class="btn btn-outline" href="/admin?year={{ prev_year }}&month={{ prev_month }}">◀ 이전달</a>
+                <h2 class="calendar-title">{{ month_label }}</h2>
+                <a class="btn btn-outline" href="/admin?year={{ next_year }}&month={{ next_month }}">다음달 ▶</a>
+            </div>
+        </div>
 
-        {% if events %}
-            <div class="admin-event-list">
-                {% for event in events %}
-                    <div class="admin-event-card" style="border-left: 6px solid {{ event.color or '#2563eb' }}">
+        <div class="admin-calendar-card">
+            <div class="calendar-weekdays">
+                <div class="weekday">일</div>
+                <div class="weekday">월</div>
+                <div class="weekday">화</div>
+                <div class="weekday">수</div>
+                <div class="weekday">목</div>
+                <div class="weekday">금</div>
+                <div class="weekday">토</div>
+            </div>
+
+            <div class="calendar-grid">
+                {% for week in admin_weeks %}
+                    {% for day in week %}
+                        <a href="/admin?year={{ year }}&month={{ month }}&selected_date={{ day.date_str }}" class="calendar-cell-link">
+                            <div class="admin-calendar-cell {% if not day.is_current_month %}is-other-month{% endif %} {% if day.is_today %}is-today{% endif %} {% if day.is_selected %}is-selected{% endif %}">
+                                <div class="cell-header">
+                                    <span class="day-number">{{ day.day_num }}</span>
+                                    {% if day.is_today %}
+                                        <span class="today-badge">TODAY</span>
+                                    {% endif %}
+                                </div>
+
+                                <div class="admin-calendar-body">
+                                    {% if day.has_events %}
+                                        <div class="admin-mini-badge">이벤트 {{ day.event_count }}개</div>
+
+                                        {% if day.pending_count > 0 %}
+                                            <div class="admin-mini-badge warning">대기 {{ day.pending_count }}건</div>
+                                        {% endif %}
+                                    {% else %}
+                                        <div class="admin-mini-empty">일정 없음</div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </a>
+                    {% endfor %}
+                {% endfor %}
+            </div>
+        </div>
+    </section>
+
+    <section class="form-card">
+        <h2 class="section-title">
+            {% if selected_date %}
+                {{ selected_date }} 일정 상세
+            {% else %}
+                날짜 상세
+            {% endif %}
+        </h2>
+
+        {% if selected_admin_group and selected_admin_group.events %}
+            <div class="admin-date-group-list">
+                {% for event in selected_admin_group.events %}
+                    <div class="admin-event-card admin-date-event-card" style="border-left: 6px solid {{ event.color or '#2563eb' }}">
                         <div class="admin-event-main">
-                            <div class="admin-event-date">{{ event.date }} {{ event.start_time }}</div>
                             <div class="admin-event-title">{{ event.title }}</div>
 
                             {% if event.description %}
@@ -33,7 +89,6 @@
                             {% endif %}
 
                             <div class="admin-event-meta">
-                                <span>정원: {{ event.capacity }}</span>
                                 <span>총 신청: {{ event.total_count }}</span>
                                 <span>대기: {{ event.pending_count }}</span>
                                 <span>승인: {{ event.approved_count }}</span>
@@ -47,44 +102,79 @@
                                 </div>
                             {% endif %}
 
-                            {% if event.applicants %}
-                                <div class="admin-event-note">
-                                    <strong>신청자 현황</strong>
-                                    <div style="display: flex; flex-direction: column; gap: 8px; margin-top: 8px;">
-                                        {% for applicant in event.applicants %}
-                                            <div style="display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap;">
-                                                <span>{{ applicant.user_name or applicant.user_email }}</span>
-                                                <strong>
-                                                    {% if applicant.status == "approved" %}
-                                                        승인
-                                                    {% elif applicant.status == "rejected" %}
-                                                        거절
-                                                    {% else %}
-                                                        대기
-                                                    {% endif %}
-                                                </strong>
-                                            </div>
-                                        {% endfor %}
+                            <div class="admin-session-card">
+                                <div class="admin-session-title">{{ event.date }}</div>
+
+                                {% for slot in event.slots %}
+                                    <div class="admin-slot-card">
+                                        <div class="admin-slot-head">
+                                            <strong>{{ slot.start_time }}</strong>
+                                            <span>
+                                                정원 {{ slot.capacity }}
+                                                / 승인 {{ slot.approved_count }}
+                                                / 대기 {{ slot.pending_count }}
+                                                / 거절 {{ slot.rejected_count }}
+                                                / 잔여 {{ slot.remaining }}
+                                            </span>
+                                        </div>
+
+                                        <div class="admin-slot-applicants">
+                                            {% if slot.applicants %}
+                                                {% for applicant in slot.applicants %}
+                                                    <div class="admin-slot-applicant">
+                                                        <div>
+                                                            <div class="admin-app-user">{{ applicant.user_name or applicant.user_email }}</div>
+                                                            <div class="admin-app-email">{{ applicant.user_email }}</div>
+                                                        </div>
+
+                                                        <div class="admin-slot-status-wrap">
+                                                            {% if applicant.status == "approved" %}
+                                                                <span class="status-tag approved">승인</span>
+                                                            {% elif applicant.status == "rejected" %}
+                                                                <span class="status-tag rejected">거절</span>
+                                                            {% else %}
+                                                                <span class="status-tag pending">대기</span>
+                                                            {% endif %}
+
+                                                            {% if applicant.status == "pending" %}
+                                                                <div class="admin-inline-actions">
+                                                                    <form method="post" action="/admin/approve/{{ applicant.id }}" onsubmit="return confirm('이 신청을 승인하시겠습니까?');">
+                                                                        <button type="submit" class="btn btn-xs">승인</button>
+                                                                    </form>
+
+                                                                    <form method="post" action="/admin/reject/{{ applicant.id }}" onsubmit="return confirm('이 신청을 거절하시겠습니까?');">
+                                                                        <button type="submit" class="btn btn-xs btn-outline">거절</button>
+                                                                    </form>
+                                                                </div>
+                                                            {% endif %}
+                                                        </div>
+                                                    </div>
+                                                {% endfor %}
+                                            {% else %}
+                                                <div class="admin-slot-empty">이 슬롯 신청자가 없습니다.</div>
+                                            {% endif %}
+                                        </div>
                                     </div>
-                                </div>
-                            {% endif %}
+                                {% endfor %}
+                            </div>
                         </div>
 
-                        <form method="post"
-                              action="/admin/delete/{{ event.id }}"
-                              onsubmit="return confirm('이 스케줄을 삭제하시겠습니까?');">
-                            <button type="submit" class="btn btn-danger">삭제</button>
-                        </form>
+                        <div class="admin-event-side-actions">
+                            <a href="/admin/edit/{{ event.id }}" class="btn btn-outline">수정</a>
+                            <form method="post" action="/admin/delete/{{ event.id }}" onsubmit="return confirm('이 이벤트를 삭제하시겠습니까?');">
+                                <button type="submit" class="btn btn-danger">삭제</button>
+                            </form>
+                        </div>
                     </div>
                 {% endfor %}
             </div>
         {% else %}
-            <div class="empty-box">등록된 스케줄이 없습니다.</div>
+            <div class="empty-box">선택한 날짜에 등록된 이벤트가 없습니다.</div>
         {% endif %}
     </section>
 
     <section class="form-card">
-        <h2 class="section-title">대기 중 신청</h2>
+        <h2 class="section-title">전체 대기 중 신청</h2>
 
         {% if pending_requests %}
             <div class="admin-application-list">
@@ -94,26 +184,22 @@
                             <div class="admin-app-user">{{ app.user_name or app.user_email }}</div>
                             <div class="admin-app-email">{{ app.user_email }}</div>
 
-                            {% if app.event %}
+                            {% if app.event and app.session and app.slot %}
                                 <div class="admin-app-event">
                                     <span class="event-color-dot" style="background: {{ app.event.color or '#2563eb' }}"></span>
-                                    {{ app.event.date }} {{ app.event.start_time }} / {{ app.event.title }}
+                                    {{ app.session.date }} / {{ app.event.title }} / {{ app.slot.start_time }}
                                 </div>
                             {% else %}
-                                <div class="admin-app-event missing">연결된 스케줄 정보를 찾을 수 없습니다.</div>
+                                <div class="admin-app-event missing">연결된 이벤트 정보를 찾을 수 없습니다.</div>
                             {% endif %}
                         </div>
 
                         <div class="admin-app-actions">
-                            <form method="post"
-                                  action="/admin/approve/{{ app.id }}"
-                                  onsubmit="return confirm('이 신청을 승인하시겠습니까?');">
+                            <form method="post" action="/admin/approve/{{ app.id }}" onsubmit="return confirm('이 신청을 승인하시겠습니까?');">
                                 <button type="submit" class="btn">승인</button>
                             </form>
 
-                            <form method="post"
-                                  action="/admin/reject/{{ app.id }}"
-                                  onsubmit="return confirm('이 신청을 거절하시겠습니까?');">
+                            <form method="post" action="/admin/reject/{{ app.id }}" onsubmit="return confirm('이 신청을 거절하시겠습니까?');">
                                 <button type="submit" class="btn btn-outline">거절</button>
                             </form>
                         </div>

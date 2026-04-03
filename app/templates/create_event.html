@@ -1,66 +1,227 @@
 {% extends "base.html" %}
 
-{% block title %}스케줄 생성 | HAN Scheduler{% endblock %}
+{% block title %}
+    {% if mode == "edit" %}
+        이벤트 수정 | HAN Scheduler
+    {% else %}
+        이벤트 생성 | HAN Scheduler
+    {% endif %}
+{% endblock %}
 
 {% block content %}
 <section class="admin-page">
     <div class="admin-toolbar">
         <div>
-            <h1 class="page-title">스케줄 생성</h1>
-            <p class="page-desc">날짜, 시간, 색상, 특이사항까지 한 번에 등록합니다.</p>
+            <h1 class="page-title">
+                {% if mode == "edit" %}이벤트 수정{% else %}이벤트 생성{% endif %}
+            </h1>
+            <p class="page-desc">하나의 이벤트 안에 여러 날짜와 시간대 슬롯을 묶어서 등록할 수 있습니다.</p>
         </div>
-        <a href="/admin" class="btn btn-outline">관리자 페이지로</a>
+        <div class="admin-toolbar-actions">
+            <a href="/admin" class="btn btn-outline">목록으로</a>
+        </div>
     </div>
 
     <section class="form-card form-card-lg">
-        <form action="/admin/create" method="post" class="form-grid">
-            <div class="form-group">
-                <label for="title">스케줄 제목</label>
-                <input id="title" type="text" name="title" required placeholder="예: 오후 근무 / 행사 / 미팅">
-            </div>
-
-            <div class="form-row">
-                <div class="form-group">
-                    <label for="date_value">날짜</label>
-                    <input id="date_value" type="date" name="date_value" required>
-                </div>
-
-                <div class="form-group">
-                    <label for="start_time">시작 시간</label>
-                    <input id="start_time" type="time" name="start_time" required>
-                </div>
-
-                <div class="form-group">
-                    <label for="capacity">정원</label>
-                    <input id="capacity" type="number" name="capacity" min="1" value="1" required>
-                </div>
-            </div>
-
+        <form
+            method="post"
+            action="{% if mode == 'edit' and event %}/admin/edit/{{ event.id }}{% else %}/admin/create{% endif %}"
+            class="form-grid"
+            id="eventForm"
+        >
             <div class="form-row form-row-2">
                 <div class="form-group">
-                    <label for="color">색상</label>
+                    <label for="title">이벤트명</label>
+                    <input
+                        id="title"
+                        type="text"
+                        name="title"
+                        value="{{ event.title if event else '' }}"
+                        placeholder="예: wdhl 인천지사"
+                        required
+                    >
+                </div>
+
+                <div class="form-group">
+                    <label for="color">이벤트 색상</label>
                     <div class="color-field">
-                        <input id="color" type="color" name="color" value="#2563eb">
-                        <span class="field-help">달력과 리스트에서 이 색으로 표시됩니다.</span>
+                        <input
+                            id="color"
+                            type="color"
+                            name="color"
+                            value="{{ event.color if event and event.color else '#2563eb' }}"
+                        >
+                        <span class="field-help">달력 연속 바 색상입니다.</span>
                     </div>
                 </div>
             </div>
 
             <div class="form-group">
                 <label for="description">설명</label>
-                <textarea id="description" name="description" rows="4" placeholder="간단한 설명을 입력하세요."></textarea>
+                <textarea
+                    id="description"
+                    name="description"
+                    rows="3"
+                    placeholder="이벤트 설명"
+                >{{ event.description if event else '' }}</textarea>
             </div>
 
             <div class="form-group">
-                <label for="note">특이사항</label>
-                <textarea id="note" name="note" rows="4" placeholder="복장, 준비물, 주의사항 등 특이사항을 입력하세요."></textarea>
+                <label for="note">특이사항 / 메모</label>
+                <textarea
+                    id="note"
+                    name="note"
+                    rows="3"
+                    placeholder="관리자 참고용 메모"
+                >{{ event.note if event else '' }}</textarea>
             </div>
 
+            <div class="slot-editor-card">
+                <div class="slot-editor-head">
+                    <div>
+                        <h2 class="section-title" style="margin-bottom: 6px;">날짜 / 슬롯 설정</h2>
+                        <p class="page-desc">날짜별로 여러 시간대 슬롯을 추가할 수 있습니다.</p>
+                    </div>
+                    <button type="button" class="btn" id="addSessionBtn">날짜 추가</button>
+                </div>
+
+                <div class="session-list" id="sessionList"></div>
+            </div>
+
+            <input type="hidden" name="sessions_json" id="sessionsJson">
+
             <div class="form-actions">
-                <button type="submit" class="btn">스케줄 생성</button>
+                <button type="submit" class="btn">
+                    {% if mode == "edit" %}수정 저장{% else %}이벤트 생성{% endif %}
+                </button>
                 <a href="/admin" class="btn btn-outline">취소</a>
             </div>
         </form>
     </section>
 </section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const initialSessions = {{ (event.sessions if event and event.sessions else []) | tojson | safe }};
+const sessionList = document.getElementById("sessionList");
+const sessionsJsonInput = document.getElementById("sessionsJson");
+const eventForm = document.getElementById("eventForm");
+const addSessionBtn = document.getElementById("addSessionBtn");
+
+function uid() {
+    return Math.random().toString(16).slice(2, 12);
+}
+
+function addSessionCard(sessionData = null) {
+    const sessionId = sessionData?.id || uid();
+    const sessionDate = sessionData?.date || "";
+    const slots = Array.isArray(sessionData?.slots) && sessionData.slots.length
+        ? sessionData.slots
+        : [{ id: uid(), start_time: "", capacity: 1 }];
+
+    const sessionCard = document.createElement("div");
+    sessionCard.className = "session-card";
+    sessionCard.dataset.sessionId = sessionId;
+
+    sessionCard.innerHTML = `
+        <div class="session-head">
+            <div class="form-group" style="flex: 1; min-width: 220px;">
+                <label>날짜</label>
+                <input type="date" class="session-date-input" value="${sessionDate}" required>
+            </div>
+            <div class="session-head-actions">
+                <button type="button" class="btn btn-outline btn-xs add-slot-btn">슬롯 추가</button>
+                <button type="button" class="btn btn-danger btn-xs remove-session-btn">날짜 삭제</button>
+            </div>
+        </div>
+        <div class="slot-list"></div>
+    `;
+
+    const slotList = sessionCard.querySelector(".slot-list");
+
+    function addSlotRow(slotData = null) {
+        const slotId = slotData?.id || uid();
+        const startTime = slotData?.start_time || "";
+        const capacity = slotData?.capacity ?? 1;
+
+        const slotRow = document.createElement("div");
+        slotRow.className = "slot-row";
+        slotRow.dataset.slotId = slotId;
+
+        slotRow.innerHTML = `
+            <div class="form-group">
+                <label>시작 시간</label>
+                <input type="time" class="slot-start-time" value="${startTime}" required>
+            </div>
+            <div class="form-group">
+                <label>정원</label>
+                <input type="number" class="slot-capacity" value="${capacity}" min="1" required>
+            </div>
+            <div class="slot-row-action">
+                <button type="button" class="btn btn-outline btn-xs remove-slot-btn">삭제</button>
+            </div>
+        `;
+
+        slotRow.querySelector(".remove-slot-btn").addEventListener("click", () => {
+            const currentRows = slotList.querySelectorAll(".slot-row");
+            if (currentRows.length <= 1) {
+                alert("슬롯은 최소 1개 이상 필요합니다.");
+                return;
+            }
+            slotRow.remove();
+        });
+
+        slotList.appendChild(slotRow);
+    }
+
+    slots.forEach(addSlotRow);
+
+    sessionCard.querySelector(".add-slot-btn").addEventListener("click", () => addSlotRow());
+    sessionCard.querySelector(".remove-session-btn").addEventListener("click", () => {
+        const currentCards = sessionList.querySelectorAll(".session-card");
+        if (currentCards.length <= 1) {
+            alert("날짜 세션은 최소 1개 이상 필요합니다.");
+            return;
+        }
+        sessionCard.remove();
+    });
+
+    sessionList.appendChild(sessionCard);
+}
+
+function collectSessions() {
+    const sessionCards = [...sessionList.querySelectorAll(".session-card")];
+
+    return sessionCards.map((card) => {
+        const sessionId = card.dataset.sessionId || uid();
+        const date = card.querySelector(".session-date-input")?.value || "";
+
+        const slots = [...card.querySelectorAll(".slot-row")].map((row) => ({
+            id: row.dataset.slotId || uid(),
+            start_time: row.querySelector(".slot-start-time")?.value || "",
+            capacity: Number(row.querySelector(".slot-capacity")?.value || 0),
+        }));
+
+        return {
+            id: sessionId,
+            date,
+            slots,
+        };
+    });
+}
+
+addSessionBtn.addEventListener("click", () => addSessionCard());
+
+eventForm.addEventListener("submit", () => {
+    const sessions = collectSessions();
+    sessionsJsonInput.value = JSON.stringify(sessions);
+});
+
+if (initialSessions.length) {
+    initialSessions.forEach(addSessionCard);
+} else {
+    addSessionCard();
+}
+</script>
 {% endblock %}

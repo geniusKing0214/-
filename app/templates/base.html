@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}HAN Scheduler{% endblock %}</title>
-    <link rel="stylesheet" href="{{ url_for('static', path='css/style.css') }}?v=20260403v5">
+    <link rel="stylesheet" href="{{ url_for('static', path='css/style.css') }}?v=slot-final-20260403">
     {% block head %}{% endblock %}
 </head>
 <body>
@@ -14,7 +14,6 @@
 
             <nav class="topnav">
                 <a href="/">메인</a>
-
                 {% if user and user.email and is_admin %}
                     <a href="/admin">관리자 페이지</a>
                     <a href="/admin/create">스케줄 생성</a>
