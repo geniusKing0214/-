@@ -49,7 +49,7 @@
             errEl.textContent = "";
 
             if (!hasWebConfig) {
-                showErr("Google 로그인을 쓰려면 서버에 Firebase 웹 설정이 필요합니다. Render 환경 변수 FIREBASE_WEB_API_KEY, FIREBASE_AUTH_DOMAIN, FIREBASE_PROJECT_ID 와 서비스 계정 JSON(FIREBASE_CREDENTIALS_JSON)을 확인해 주세요.");
+                showErr("Google 로그인을 쓰려면 서버에 Firebase 웹 설정이 필요합니다. FIREBASE_WEB_API_KEY, FIREBASE_AUTH_DOMAIN, FIREBASE_PROJECT_ID 와 서비스 계정 JSON(FIREBASE_SERVICE_ACCOUNT_JSON 또는 FIREBASE_CREDENTIALS_JSON 등)을 확인해 주세요.");
                 return;
             }
 
@@ -83,7 +83,7 @@
                     }
                     var msg = (res.data && res.data.detail) ? res.data.detail : "로그인에 실패했습니다.";
                     if (!serverReady && res.status === 503) {
-                        msg = "서버에 Firebase 서비스 계정이 설정되지 않았습니다. FIREBASE_CREDENTIALS_JSON(또는 FIREBASE_JSON)을 Render Secret에 넣었는지 확인해 주세요.";
+                        msg = "서버에 Firebase 서비스 계정이 설정되지 않았습니다. FIREBASE_SERVICE_ACCOUNT_JSON 또는 FIREBASE_CREDENTIALS_JSON(또는 FIREBASE_JSON)을 Render Secret에 넣었는지 확인해 주세요.";
                     }
                     showErr(msg);
                 })

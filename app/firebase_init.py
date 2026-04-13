@@ -1,4 +1,4 @@
-"""Firebase Admin SDK + 웹 설정. 예전 FIREBASE_JSON / 웹 API 키 방식과 호환."""
+"""Firebase Admin SDK + 웹 설정. 여러 환경 변수 이름과 호환."""
 
 from __future__ import annotations
 
@@ -15,13 +15,18 @@ _admin_initialized = False
 def _load_service_account_dict() -> Optional[dict[str, Any]]:
     raw = os.environ.get("FIREBASE_CREDENTIALS_JSON", "").strip()
     if not raw:
+        raw = os.environ.get("FIREBASE_SERVICE_ACCOUNT_JSON", "").strip()
+    if not raw:
         raw = os.environ.get("FIREBASE_JSON", "").strip()
     if raw:
         try:
             data = json.loads(raw)
             return data if isinstance(data, dict) else None
         except json.JSONDecodeError:
-            logger.warning("FIREBASE_CREDENTIALS_JSON / FIREBASE_JSON is not valid JSON")
+            logger.warning(
+                "Firebase service account env is not valid JSON "
+                "(FIREBASE_CREDENTIALS_JSON / FIREBASE_SERVICE_ACCOUNT_JSON / FIREBASE_JSON)"
+            )
             return None
     path = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS", "").strip()
     if path and os.path.isfile(path):
