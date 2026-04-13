@@ -70,19 +70,17 @@ def _login_url_with_next(request: Request) -> str:
     return "/login"
 
 
-def _is_social_login_user(user: User) -> bool:
-    return bool(getattr(user, "google_sub", None) or getattr(user, "firebase_uid", None))
-
-
 def _firebase_login_template_ctx(safe_next: Optional[str]) -> dict[str, Any]:
-    ctx: dict[str, Any] = {"firebase_auth_enabled": False}
-    if not firebase_google_login_ready():
-        return ctx
+    """웹 SDK용 config는 키만 있으면 넘김. 서버 검증까지 되면 firebase_auth_enabled=True."""
+    ctx: dict[str, Any] = {
+        "firebase_auth_enabled": False,
+        "firebase_config": None,
+    }
     cfg = get_firebase_web_config()
-    if not cfg:
-        return ctx
-    ctx["firebase_auth_enabled"] = True
-    ctx["firebase_config"] = cfg
+    if cfg:
+        ctx["firebase_config"] = cfg
+    if cfg and firebase_google_login_ready():
+        ctx["firebase_auth_enabled"] = True
     if safe_next:
         ctx["login_next"] = safe_next
     return ctx
@@ -339,102 +337,15 @@ def render(
 
 @app.get("/register", response_class=HTMLResponse)
 def register_page(request: Request, db: Session = Depends(get_db)):
-    return render(request, "register.html", {}, db)
+    ctx: dict[str, Any] = _firebase_login_template_ctx(None)
+    ctx["auth_mode"] = "register"
+    ctx["page_title"] = "회원가입"
+    return render(request, "login.html", ctx, db)
 
 
 @app.post("/register")
-def register(
-    request: Request,
-    username: str = Form(...),
-    password: str = Form(...),
-    password_confirm: str = Form(...),
-    nickname: Optional[str] = Form(None),
-    name: Optional[str] = Form(None),
-    phone: Optional[str] = Form(None),
-    is_admin: Optional[str] = Form(None),
-    db: Session = Depends(get_db),
-):
-    username = username.strip()
-    password = password.strip()
-    password_confirm = password_confirm.strip()
-    if name is not None:
-        name = name.strip() or None
-    if phone is not None:
-        phone = phone.strip() or None
-    nick_clean = (nickname or "").strip() or None
-    if nick_clean is not None:
-        if len(nick_clean) < 2:
-            return render(
-                request,
-                "register.html",
-                {"error": "닉네임은 2자 이상이거나 비워두세요."},
-                db,
-            )
-        if len(nick_clean) > 50:
-            return render(
-                request,
-                "register.html",
-                {"error": "닉네임은 50자 이하로 입력해주세요."},
-                db,
-            )
-
-    if password != password_confirm:
-        return render(
-            request,
-            "register.html",
-            {"error": "비밀번호와 비밀번호 확인이 일치하지 않습니다."},
-            db,
-        )
-
-    if len(username) < 2:
-        return render(
-            request,
-            "register.html",
-            {"error": "아이디는 2자 이상 입력해주세요."},
-            db,
-        )
-
-    if len(username) > 255:
-        return render(
-            request,
-            "register.html",
-            {"error": "아이디(이메일)는 255자 이하로 입력해주세요."},
-            db,
-        )
-
-    if len(password) < 4:
-        return render(
-            request,
-            "register.html",
-            {"error": "비밀번호는 최소 4자 이상이어야 합니다."},
-            db,
-        )
-
-    exists = db.query(User).filter(User.username == username).first()
-    if exists:
-        return render(
-            request,
-            "register.html",
-            {"error": "이미 존재하는 아이디입니다."},
-            db,
-        )
-
-    user = User(
-        username=username,
-        nickname=nick_clean,
-        password=hash_password(password),
-        is_admin=bool(is_admin),
-        approval_status="approved" if bool(is_admin) else "pending_approval",
-    )
-    db.add(user)
-    db.commit()
-    if user.is_admin:
-        return redirect("/login")
-    reg_ctx: dict[str, Any] = {
-        "success": "회원가입이 완료되었습니다. 관리자 승인 후 로그인할 수 있습니다.",
-        **_firebase_login_template_ctx(None),
-    }
-    return render(request, "login.html", reg_ctx, db)
+def register_post_legacy(request: Request):
+    return redirect("/register", status_code=status.HTTP_303_SEE_OTHER)
 
 
 @app.get("/login", response_class=HTMLResponse)
@@ -445,6 +356,8 @@ def login_page(
 ):
     safe_next = _safe_internal_redirect_path(next)
     ctx: dict[str, Any] = _firebase_login_template_ctx(safe_next)
+    ctx["auth_mode"] = "login"
+    ctx["page_title"] = "로그인"
     err = (request.query_params.get("error") or "").strip()
     if err == "google_failed":
         ctx["error"] = "Google 로그인에 실패했습니다. 다시 시도해 주세요."
@@ -460,55 +373,8 @@ def login_page(
 
 
 @app.post("/login")
-def login(
-    request: Request,
-    username: str = Form(...),
-    password: str = Form(...),
-    next: Optional[str] = Form(None),
-    db: Session = Depends(get_db),
-):
-    safe_next = _safe_internal_redirect_path((next or "").strip())
-    login_ctx: dict[str, Any] = _firebase_login_template_ctx(safe_next)
-    if safe_next:
-        login_ctx["login_next"] = safe_next
-
-    user = db.query(User).filter(User.username == username.strip()).first()
-    if user and _is_social_login_user(user):
-        return render(
-            request,
-            "login.html",
-            {
-                **login_ctx,
-                "error": "이 계정은 Google 로그인을 사용해 주세요.",
-            },
-            db,
-        )
-
-    if not user or not verify_password(password, user.password):
-        return render(
-            request,
-            "login.html",
-            {**login_ctx, "error": "아이디 또는 비밀번호가 올바르지 않습니다."},
-            db,
-        )
-
-    approval_status = _get_user_approval_status(user)
-    if approval_status != "approved":
-        if approval_status == "pending_approval":
-            message = "관리자 승인 대기 중입니다. 승인 후 로그인 가능합니다."
-        elif approval_status == "rejected":
-            message = "계정이 관리자에 의해 거절되었습니다. 관리자에게 문의해주세요."
-        else:
-            message = "계정 상태를 확인할 수 없습니다. 관리자에게 문의해주세요."
-        return render(
-            request,
-            "login.html",
-            {**login_ctx, "error": message},
-            db,
-        )
-
-    request.session["user_id"] = user.id
-    return redirect(safe_next or "/")
+def login_post_legacy(request: Request):
+    return redirect("/login", status_code=status.HTTP_303_SEE_OTHER)
 
 
 @app.get("/logout")
@@ -629,9 +495,8 @@ def profile_page(
         request,
         "profile.html",
         {
-            "page_title": "프로필",
+            "page_title": "내 정보",
             "profile_success": updated == "1",
-            "nickname_admin_only": _is_social_login_user(user),
         },
         db,
         current_user=user,
@@ -647,25 +512,13 @@ def profile_update(
     user = get_current_user(request, db)
     if not user:
         return redirect("/login")
-    if _is_social_login_user(user):
-        return render(
-            request,
-            "profile.html",
-            {
-                "page_title": "프로필",
-                "error": "Google 로그인 계정의 닉네임은 관리자(회원 목록)에서만 변경할 수 있습니다.",
-                "nickname_admin_only": True,
-            },
-            db,
-            current_user=user,
-        )
     nick = nickname.strip()
     if nick and len(nick) < 2:
         return render(
             request,
             "profile.html",
             {
-                "page_title": "프로필",
+                "page_title": "내 정보",
                 "error": "닉네임은 2자 이상이거나 비워두세요.",
             },
             db,
@@ -676,7 +529,7 @@ def profile_update(
             request,
             "profile.html",
             {
-                "page_title": "프로필",
+                "page_title": "내 정보",
                 "error": "닉네임은 50자 이하로 입력해주세요.",
             },
             db,

@@ -1,80 +1,111 @@
-{% extends "base.html" %}
-
-{% block content %}
-<section class="card form-card">
-    <h1>로그인</h1>
-
-    {% if error %}
-    <div class="alert error">{{ error }}</div>
-    {% endif %}
-
-    {% if success %}
-    <div class="alert success">{{ success }}</div>
-    {% endif %}
-
-    <form method="post" action="/login">
-        {% if login_next %}
-        <input type="hidden" name="next" value="{{ login_next }}">
-        {% endif %}
-        <label for="username">이메일</label>
-        <input type="email" id="username" name="username" placeholder="example@email.com" required autocomplete="username">
-
-        <label for="password">비밀번호</label>
-        <input type="password" id="password" name="password" placeholder="비밀번호 입력" required autocomplete="current-password">
-
-        <button type="submit" class="btn btn-primary full">로그인</button>
-    </form>
-
-    {% if firebase_auth_enabled %}
-    <div class="oauth-divider"><span>또는</span></div>
-    <button type="button" class="btn btn-google full" id="firebaseGoogleBtn">Google로 계속하기</button>
-    <p class="alert error oauth-inline-error" id="firebaseLoginError" hidden></p>
-    <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
-    <script>
-    (function () {
-        var cfg = {{ firebase_config | tojson }};
-        var nextPath = {{ (login_next or "") | tojson }};
-        firebase.initializeApp(cfg);
-        var btn = document.getElementById("firebaseGoogleBtn");
-        var errEl = document.getElementById("firebaseLoginError");
-        if (!btn) return;
-        btn.addEventListener("click", function () {
-            errEl.hidden = true;
-            errEl.textContent = "";
-            var provider = new firebase.auth.GoogleAuthProvider();
-            firebase.auth().signInWithPopup(provider)
-                .then(function (result) { return result.user.getIdToken(); })
-                .then(function (idToken) {
-                    return fetch("/auth/firebase/session", {
-                        method: "POST",
-                        headers: {
-                            "Content-Type": "application/json",
-                            "Accept": "application/json"
-                        },
-                        body: JSON.stringify({ id_token: idToken, next: nextPath })
-                    });
-                })
-                .then(function (r) { return r.json().then(function (data) { return { ok: r.ok, data: data }; }); })
-                .then(function (res) {
-                    if (res.ok && res.data.ok && res.data.redirect) {
-                        window.location.href = res.data.redirect;
-                        return;
-                    }
-                    errEl.textContent = (res.data && res.data.detail) ? res.data.detail : "로그인에 실패했습니다.";
-                    errEl.hidden = false;
-                })
-                .catch(function () {
-                    errEl.textContent = "Google 로그인이 취소되었거나 오류가 발생했습니다.";
-                    errEl.hidden = false;
-                });
-        });
-    })();
-    </script>
-    {% endif %}
-
-    <p class="form-bottom">
-        계정이 없나요? <a href="/register">회원가입</a>
-    </p>
-</section>
-{% endblock %}
+{% extends "base.html" %}
+
+{% set auth_mode = auth_mode | default("login") %}
+
+{% block content %}
+<section class="card form-card">
+    {% if auth_mode == "register" %}
+    <h1>회원가입</h1>
+    <p class="subtext">Google 계정으로 가입합니다. 승인 후 이용할 수 있습니다.</p>
+    {% else %}
+    <h1>로그인</h1>
+    <p class="subtext">Google 계정으로 로그인합니다.</p>
+    {% endif %}
+
+    {% if error %}
+    <div class="alert error">{{ error }}</div>
+    {% endif %}
+
+    {% if success %}
+    <div class="alert success">{{ success }}</div>
+    {% endif %}
+
+    <button type="button" class="btn btn-google full" id="firebaseGoogleBtn">
+        {% if auth_mode == "register" %}Google로 회원가입{% else %}Google로 로그인{% endif %}
+    </button>
+    <p class="alert error oauth-inline-error" id="firebaseLoginError" hidden></p>
+
+    {% if firebase_config %}
+    <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+    {% endif %}
+
+    <script>
+    (function () {
+        var btn = document.getElementById("firebaseGoogleBtn");
+        var errEl = document.getElementById("firebaseLoginError");
+        var nextPath = {{ (login_next or "") | tojson }};
+        var hasWebConfig = {{ 'true' if firebase_config else 'false' }};
+        var serverReady = {{ 'true' if firebase_auth_enabled else 'false' }};
+        if (!btn || !errEl) return;
+
+        function showErr(msg) {
+            errEl.textContent = msg;
+            errEl.hidden = false;
+        }
+
+        btn.addEventListener("click", function () {
+            errEl.hidden = true;
+            errEl.textContent = "";
+
+            if (!hasWebConfig) {
+                showErr("Google 로그인을 쓰려면 서버에 Firebase 웹 설정이 필요합니다. Render 환경 변수 FIREBASE_WEB_API_KEY, FIREBASE_AUTH_DOMAIN, FIREBASE_PROJECT_ID 와 서비스 계정 JSON(FIREBASE_CREDENTIALS_JSON)을 확인해 주세요.");
+                return;
+            }
+
+            var cfg = {{ firebase_config | tojson }};
+            if (!firebase.apps || !firebase.apps.length) {
+                firebase.initializeApp(cfg);
+            }
+
+            var provider = new firebase.auth.GoogleAuthProvider();
+            firebase.auth().signInWithPopup(provider)
+                .then(function (result) { return result.user.getIdToken(); })
+                .then(function (idToken) {
+                    return fetch("/auth/firebase/session", {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json",
+                            "Accept": "application/json"
+                        },
+                        body: JSON.stringify({ id_token: idToken, next: nextPath })
+                    });
+                })
+                .then(function (r) {
+                    return r.json().then(function (data) {
+                        return { ok: r.ok, status: r.status, data: data };
+                    });
+                })
+                .then(function (res) {
+                    if (res.ok && res.data && res.data.ok && res.data.redirect) {
+                        window.location.href = res.data.redirect;
+                        return;
+                    }
+                    var msg = (res.data && res.data.detail) ? res.data.detail : "로그인에 실패했습니다.";
+                    if (!serverReady && res.status === 503) {
+                        msg = "서버에 Firebase 서비스 계정이 설정되지 않았습니다. FIREBASE_CREDENTIALS_JSON(또는 FIREBASE_JSON)을 Render Secret에 넣었는지 확인해 주세요.";
+                    }
+                    showErr(msg);
+                })
+                .catch(function (err) {
+                    var m = "Google 로그인이 취소되었거나 오류가 발생했습니다.";
+                    if (err && err.code === "auth/unauthorized-domain") {
+                        m = "이 사이트 도메인이 Firebase 콘솔의 Authentication → 설정 → 승인된 도메인에 등록되어 있지 않습니다.";
+                    } else if (err && err.message) {
+                        m = m + " (" + err.message + ")";
+                    }
+                    showErr(m);
+                });
+        });
+    })();
+    </script>
+
+    <p class="form-bottom">
+        {% if auth_mode == "register" %}
+        이미 계정이 있나요? <a href="/login">로그인</a>
+        {% else %}
+        계정이 없나요? <a href="/register">회원가입</a>
+        {% endif %}
+    </p>
+</section>
+{% endblock %}
