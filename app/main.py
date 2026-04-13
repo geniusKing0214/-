@@ -453,7 +453,7 @@ async def firebase_auth_session(request: Request, db: Session = Depends(get_db))
                     username=email,
                     nickname=None,
                     firebase_uid=uid,
-                    password=hash_password(secrets.token_urlsafe(48)),
+                    password=hash_password(secrets.token_hex(24)),
                     is_admin=False,
                     approval_status="pending_approval",
                 )
