@@ -30,6 +30,7 @@ class User(Base):
 
     applications = relationship(
         "Application",
+        foreign_keys="Application.user_id",
         back_populates="user",
         cascade="all, delete-orphan",
     )
