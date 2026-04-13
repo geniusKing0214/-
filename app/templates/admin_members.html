@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="page-wrap admin-members-page">
+    <div class="page-header">
+        <h1>회원 목록</h1>
+        <div class="admin-members-actions">
+            <a href="/admin/events" class="btn btn-outline btn-sm">이벤트 관리</a>
+            <a href="/admin/operations" class="btn btn-outline btn-sm">운영</a>
+        </div>
+    </div>
+
+    <div class="card member-list-card">
+        {% if members %}
+        <div class="table-scroll">
+            <table class="member-table">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>로그인 아이디</th>
+                        <th>닉네임</th>
+                        <th>화면 표시</th>
+                        <th>관리자</th>
+                        <th>승인 상태</th>
+                        <th>가입일</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for m in members %}
+                    <tr>
+                        <td>{{ m.id }}</td>
+                        <td>{{ m.username }}</td>
+                        <td>{% if m.nickname %}{{ m.nickname }}{% else %}—{% endif %}</td>
+                        <td>{{ display_name(m) }}</td>
+                        <td>{% if m.is_admin %}예{% else %}—{% endif %}</td>
+                        <td>
+                            {% if m.approval_status == "approved" %}
+                            <span class="badge success">승인</span>
+                            {% elif m.approval_status == "pending_approval" %}
+                            <span class="badge warning">대기</span>
+                            {% elif m.approval_status == "rejected" %}
+                            <span class="badge danger">거절</span>
+                            {% else %}
+                            {{ m.approval_status }}
+                            {% endif %}
+                        </td>
+                        <td class="member-date">{{ m.created_at.strftime("%Y-%m-%d %H:%M") if m.created_at else "—" }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="empty-inline">등록된 회원이 없습니다.</p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

@@ -2,7 +2,7 @@ import logging
 import os
 from pathlib import Path
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker, declarative_base
 
 logger = logging.getLogger(__name__)
@@ -50,6 +50,17 @@ SessionLocal = sessionmaker(
 )
 
 Base = declarative_base()
+
+
+def ensure_sqlite_migrations(engine) -> None:
+    """기존 SQLite DB에 컬럼이 없을 때만 ALTER (Alembic 없이 경량 마이그레이션)."""
+    if not str(engine.url).startswith("sqlite"):
+        return
+    with engine.begin() as conn:
+        cols = conn.execute(text("PRAGMA table_info(users)")).fetchall()
+        names = {row[1] for row in cols}
+        if "nickname" not in names:
+            conn.execute(text("ALTER TABLE users ADD COLUMN nickname VARCHAR(50)"))
 
 
 def get_db():

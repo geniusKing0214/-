@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/css/style.css?v=20260415b">
+    <link rel="stylesheet" href="/static/css/style.css?v=20260416">
 </head>
 <body>
     <div class="nav-mobile-backdrop" id="navMobileBackdrop" hidden aria-hidden="true"></div>
@@ -20,7 +20,7 @@
 
                 <div class="topbar-end">
                     {% if current_user %}
-                    <span class="nav-user nav-user-compact nav-user-topbar">{{ current_user.username }}님</span>
+                    <span class="nav-user nav-user-compact nav-user-topbar">{{ display_name(current_user) }}님</span>
                     {% endif %}
                     <button
                         type="button"
@@ -44,12 +44,13 @@
             <ul class="nav-list" role="list">
                 {% if current_user %}
                 <li class="nav-drawer-user nav-drawer-user--mobile-only">
-                    <span class="nav-user nav-user-block">{{ current_user.username }}님</span>
+                    <span class="nav-user nav-user-block">{{ display_name(current_user) }}님</span>
                 </li>
                 {% endif %}
                 <li class="nav-list-heading"><span>바로가기</span></li>
                 <li><a href="/">홈</a></li>
                 {% if current_user %}
+                <li><a href="/profile">프로필 · 닉네임</a></li>
                 <li><a href="/my-applications">내 신청</a></li>
                 <li>
                     {% if unread_count and unread_count > 0 %}
@@ -61,6 +62,7 @@
                 {% if current_user.is_admin %}
                 <li class="nav-list-heading"><span>관리자</span></li>
                 <li><a href="/admin/events">이벤트 관리</a></li>
+                <li><a href="/admin/members">회원 목록</a></li>
                 <li><a href="/admin/operations">운영</a></li>
                 {% endif %}
                 <li class="nav-list-divider" role="presentation"></li>

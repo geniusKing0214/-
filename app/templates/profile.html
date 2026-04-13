@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="card form-card wide-card">
+    <h1>프로필</h1>
+    <p class="subtext">표시 이름으로 쓰는 <strong>닉네임</strong>을 바꿀 수 있습니다. 로그인 아이디(이메일)는 변경할 수 없습니다.</p>
+
+    {% if profile_success %}
+    <div class="alert success">닉네임이 저장되었습니다.</div>
+    {% endif %}
+
+    {% if error %}
+    <div class="alert error">{{ error }}</div>
+    {% endif %}
+
+    <form method="post" action="/profile">
+        <label for="login_id">로그인 아이디</label>
+        <input type="text" id="login_id" value="{{ current_user.username }}" disabled class="input-disabled">
+
+        <label for="nickname">닉네임</label>
+        <input
+            type="text"
+            id="nickname"
+            name="nickname"
+            value="{{ current_user.nickname or '' }}"
+            placeholder="비우면 로그인 아이디로 표시됩니다"
+            maxlength="50"
+            autocomplete="nickname"
+        >
+        <p class="form-hint">2~50자. 비우면 화면에는 로그인 아이디가 표시됩니다.</p>
+
+        <button type="submit" class="btn btn-primary full">저장</button>
+    </form>
+</section>
+{% endblock %}

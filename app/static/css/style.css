@@ -974,6 +974,71 @@ textarea {
     }
 }
 
+.admin-members-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.member-list-card {
+    padding: 0;
+    overflow: hidden;
+}
+
+.table-scroll {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+.member-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.875rem;
+}
+
+.member-table th,
+.member-table td {
+    padding: 10px 12px;
+    text-align: left;
+    border-bottom: 1px solid #e5e7eb;
+}
+
+.member-table th {
+    font-weight: 800;
+    color: var(--cute-primary-dark);
+    background: rgba(124, 58, 237, 0.06);
+    white-space: nowrap;
+}
+
+.member-table tbody tr:hover {
+    background: rgba(124, 58, 237, 0.04);
+}
+
+.member-date {
+    white-space: nowrap;
+    color: var(--cute-muted);
+    font-size: 0.8125rem;
+}
+
+.input-disabled {
+    background: #f1f5f9 !important;
+    color: #64748b;
+    cursor: not-allowed;
+}
+
+.form-hint {
+    margin: -4px 0 14px;
+    font-size: 0.8125rem;
+    color: var(--cute-muted);
+}
+
+.empty-inline {
+    padding: 20px;
+    text-align: center;
+    color: var(--cute-muted);
+    margin: 0;
+}
+
 .detail-card {
     background: #fff;
     border: 1px solid rgba(233, 213, 255, 0.55);

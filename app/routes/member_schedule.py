@@ -9,10 +9,12 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models import Notification, Schedule, ScheduleApplication, User
+from app.template_globals import attach_template_globals
 from app.utils.auth import get_current_user
 
 router = APIRouter(prefix="/member/schedules", tags=["member_schedules"])
 templates = Jinja2Templates(directory="app/templates")
+attach_template_globals(templates)
 
 _WEEKDAY_KO = ("월", "화", "수", "목", "금", "토", "일")
 
@@ -120,11 +122,13 @@ def member_schedule_list(
         "member_schedule_list.html",
         {
             "request": request,
-            "user": current_user,
+            "current_user": current_user,
+            "page_title": "이벤트",
+            "unread_count": _member_unread_count(current_user, db),
             "schedules": schedules,
             "applied_schedule_ids": applied_schedule_ids,
             "application_counts": application_counts,
-        }
+        },
     )
 
 
@@ -201,11 +205,13 @@ def member_schedule_detail(
         "member_schedule_detail.html",
         {
             "request": request,
-            "user": current_user,
+            "current_user": current_user,
+            "page_title": "이벤트 상세",
+            "unread_count": _member_unread_count(current_user, db),
             "schedule": schedule,
             "my_application": my_application,
             "current_count": current_count,
-        }
+        },
     )
 
 

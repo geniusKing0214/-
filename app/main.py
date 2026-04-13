@@ -13,9 +13,10 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 from starlette.middleware.sessions import SessionMiddleware
 
-from app.database import Base, SessionLocal, engine
+from app.database import Base, SessionLocal, engine, ensure_sqlite_migrations
 from app.models import User, Event, EventSlot, Application, Notification
 from app.routes.member_schedule import router as member_schedule_router
+from app.template_globals import attach_template_globals, display_name as user_display_name
 
 
 app = FastAPI(title="Scheduler App")
@@ -34,11 +35,13 @@ app.add_middleware(
 )
 
 Base.metadata.create_all(bind=engine)
+ensure_sqlite_migrations(engine)
 
 app.include_router(member_schedule_router)
 
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 templates = Jinja2Templates(directory="app/templates")
+attach_template_globals(templates)
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
@@ -261,6 +264,8 @@ def render(
         "unread_count": get_unread_count(current_user, db),
         **context,
     }
+    if "page_title" not in full_context:
+        full_context["page_title"] = "스케줄"
     return templates.TemplateResponse(request, template_name, full_context)
 
 
@@ -275,6 +280,7 @@ def register(
     username: str = Form(...),
     password: str = Form(...),
     password_confirm: str = Form(...),
+    nickname: Optional[str] = Form(None),
     name: Optional[str] = Form(None),
     phone: Optional[str] = Form(None),
     is_admin: Optional[str] = Form(None),
@@ -287,6 +293,22 @@ def register(
         name = name.strip() or None
     if phone is not None:
         phone = phone.strip() or None
+    nick_clean = (nickname or "").strip() or None
+    if nick_clean is not None:
+        if len(nick_clean) < 2:
+            return render(
+                request,
+                "register.html",
+                {"error": "닉네임은 2자 이상이거나 비워두세요."},
+                db,
+            )
+        if len(nick_clean) > 50:
+            return render(
+                request,
+                "register.html",
+                {"error": "닉네임은 50자 이하로 입력해주세요."},
+                db,
+            )
 
     if password != password_confirm:
         return render(
@@ -323,6 +345,7 @@ def register(
 
     user = User(
         username=username,
+        nickname=nick_clean,
         password=hash_password(password),
         is_admin=bool(is_admin),
         approval_status="approved" if bool(is_admin) else "pending_approval",
@@ -383,6 +406,64 @@ def login(
 def logout(request: Request):
     request.session.clear()
     return redirect("/login")
+
+
+@app.get("/profile", response_class=HTMLResponse)
+def profile_page(
+    request: Request,
+    updated: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+):
+    user = get_current_user(request, db)
+    if not user:
+        return redirect("/login")
+    return render(
+        request,
+        "profile.html",
+        {
+            "page_title": "프로필",
+            "profile_success": updated == "1",
+        },
+        db,
+        current_user=user,
+    )
+
+
+@app.post("/profile")
+def profile_update(
+    request: Request,
+    nickname: str = Form(""),
+    db: Session = Depends(get_db),
+):
+    user = get_current_user(request, db)
+    if not user:
+        return redirect("/login")
+    nick = nickname.strip()
+    if nick and len(nick) < 2:
+        return render(
+            request,
+            "profile.html",
+            {
+                "page_title": "프로필",
+                "error": "닉네임은 2자 이상이거나 비워두세요.",
+            },
+            db,
+            current_user=user,
+        )
+    if len(nick) > 50:
+        return render(
+            request,
+            "profile.html",
+            {
+                "page_title": "프로필",
+                "error": "닉네임은 50자 이하로 입력해주세요.",
+            },
+            db,
+            current_user=user,
+        )
+    user.nickname = nick if nick else None
+    db.commit()
+    return redirect("/profile?updated=1")
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -513,7 +594,7 @@ def apply_to_slot(
         db.add(
             Notification(
                 user_id=admin.id,
-                message=f"{user.username}님이 '{slot.event.title}' {slot.start_time.strftime('%H:%M')} 슬롯에 신청했습니다.",
+                message=f"{user_display_name(user)}님이 '{slot.event.title}' {slot.start_time.strftime('%H:%M')} 슬롯에 신청했습니다.",
                 is_read=False,
             )
         )
@@ -671,6 +752,26 @@ def admin_event_edit(
     )
 
 
+@app.get("/admin/members", response_class=HTMLResponse)
+def admin_members(request: Request, db: Session = Depends(get_db)):
+    try:
+        admin = admin_required(request, db)
+    except PermissionError:
+        return redirect("/login")
+
+    members = db.query(User).order_by(User.id.asc()).all()
+    return render(
+        request,
+        "admin_members.html",
+        {
+            "page_title": "회원 목록",
+            "members": members,
+        },
+        db,
+        current_user=admin,
+    )
+
+
 @app.post("/admin/events/create")
 def create_event(
     request: Request,
@@ -804,7 +905,7 @@ def approve_user(user_id: int, request: Request, db: Session = Depends(get_db)):
     db.add(
         Notification(
             user_id=admin.id,
-            message=f"사용자 '{getattr(user, 'username', user.id)}' 계정을 승인했습니다.",
+            message=f"사용자 '{user_display_name(user)}' 계정을 승인했습니다.",
             is_read=False,
         )
     )
@@ -830,7 +931,7 @@ def reject_user(user_id: int, request: Request, db: Session = Depends(get_db)):
     db.add(
         Notification(
             user_id=admin.id,
-            message=f"사용자 '{getattr(user, 'username', user.id)}' 계정을 거절했습니다.",
+            message=f"사용자 '{user_display_name(user)}' 계정을 거절했습니다.",
             is_read=False,
         )
     )

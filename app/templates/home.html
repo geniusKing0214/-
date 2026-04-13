@@ -6,7 +6,7 @@
 
     {% if current_user %}
         <p class="subtext">
-            <strong>{{ current_user.username }}</strong>님, 로그인 상태입니다.
+            <strong>{{ display_name(current_user) }}</strong>님, 로그인 상태입니다.
         </p>
         <div class="button-row">
             <a href="/logout" class="btn btn-secondary">로그아웃</a>
