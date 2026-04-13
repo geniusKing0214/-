@@ -2,7 +2,7 @@ import logging
 import os
 from pathlib import Path
 
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.orm import sessionmaker, declarative_base
 
 logger = logging.getLogger(__name__)
@@ -65,6 +65,21 @@ def ensure_sqlite_migrations(engine) -> None:
             conn.execute(text("ALTER TABLE users ADD COLUMN google_sub VARCHAR(255)"))
         if "firebase_uid" not in names:
             conn.execute(text("ALTER TABLE users ADD COLUMN firebase_uid VARCHAR(128)"))
+
+
+def ensure_events_location_column(engine) -> None:
+    """기존 DB에 events.location 없으면 추가 (SQLite / PostgreSQL 등)."""
+    try:
+        insp = inspect(engine)
+        if not insp.has_table("events"):
+            return
+        col_names = {c["name"] for c in insp.get_columns("events")}
+    except Exception:
+        return
+    if "location" in col_names:
+        return
+    with engine.begin() as conn:
+        conn.execute(text("ALTER TABLE events ADD COLUMN location VARCHAR(300)"))
 
 
 def get_db():

@@ -1328,133 +1328,136 @@ button.btn-google:hover {
     box-shadow: var(--cute-shadow-sm);
 }
 
-/* 홈 · 스케줄 허브 */
-.home-scheduler-page {
-    max-width: 920px;
+/* 홈 · 달력 스케줄 (깔끔/귀염) */
+.sched-page {
+    max-width: 720px;
     margin: 0 auto;
+    padding-bottom: 48px;
 }
 
-.home-hero {
-    margin-bottom: 18px;
+.sched-hero {
+    text-align: center;
+    margin-bottom: 22px;
 }
 
-.home-quick-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-    gap: 10px;
-    margin-bottom: 20px;
-}
-
-.home-quick-card {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 4px;
-    padding: 14px 16px;
-    border-radius: 14px;
-    background: rgba(255, 255, 255, 0.95);
-    border: 1px solid rgba(233, 213, 255, 0.55);
-    box-shadow: var(--cute-shadow-sm);
-    text-decoration: none;
-    color: inherit;
-    transition: transform 0.12s ease, box-shadow 0.12s ease;
-    position: relative;
-}
-
-.home-quick-card:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 8px 24px rgba(124, 58, 237, 0.12);
-}
-
-.home-quick-card--admin {
-    border-color: rgba(167, 139, 250, 0.45);
-    background: linear-gradient(145deg, rgba(250, 245, 255, 0.98), rgba(255, 255, 255, 0.96));
-}
-
-.home-quick-card--muted {
-    opacity: 0.92;
-}
-
-.home-quick-title {
+.sched-title {
+    font-size: 1.45rem;
     font-weight: 800;
-    font-size: 0.9rem;
+    letter-spacing: -0.03em;
+    color: var(--cute-primary-dark);
+    margin: 0 0 10px;
+}
+
+.sched-greeting {
+    margin: 0;
+    font-size: 0.92rem;
+    color: #64748b;
+    line-height: 1.55;
+}
+
+.sched-name {
+    font-weight: 700;
+    color: var(--cute-text);
+}
+
+.sched-guest-btns {
+    margin-top: 14px;
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+}
+
+.sched-h2 {
+    font-size: 1.05rem;
+    font-weight: 800;
+    margin: 0 0 8px;
     color: var(--cute-primary-dark);
 }
 
-.home-quick-desc {
-    font-size: 0.75rem;
-    color: var(--cute-muted);
+.sched-h2-inline {
+    margin: 0;
 }
 
-.home-quick-badge {
-    position: absolute;
-    top: 10px;
-    right: 12px;
-    min-width: 1.5em;
-    padding: 2px 8px;
+.sched-admin-badge {
+    display: inline-block;
+    margin-left: 8px;
+    padding: 2px 10px;
+    font-size: 0.68rem;
+    font-weight: 800;
     border-radius: 999px;
-    font-size: 0.7rem;
-    font-weight: 800;
-    background: #e0e7ff;
-    color: #3730a3;
+    background: linear-gradient(135deg, #fce7f3, #ede9fe);
+    color: #6b21a8;
+    vertical-align: middle;
 }
 
-.home-quick-badge--warn {
-    background: #fef3c7;
-    color: #92400e;
+.sched-admin-card {
+    margin-bottom: 26px;
+    border-radius: 20px;
+    border: 1px solid rgba(233, 213, 255, 0.65);
+    background: linear-gradient(165deg, rgba(255, 255, 255, 0.98), rgba(250, 245, 255, 0.92));
+    box-shadow: 0 12px 40px rgba(124, 58, 237, 0.08);
 }
 
-.home-admin-alerts {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    margin-bottom: 20px;
+.sched-hint {
+    margin: 0 0 16px;
+    font-size: 0.85rem;
+    color: var(--cute-muted);
+    line-height: 1.5;
 }
 
-.admin-alert-link {
-    display: block;
-    text-decoration: none;
-    color: inherit;
-    border-radius: 12px;
-}
-
-.admin-alert-link--soft {
-    background: rgba(241, 245, 249, 0.9);
-    border: 1px solid rgba(148, 163, 184, 0.35);
-}
-
-.home-section-title {
-    font-size: 1.1rem;
-    margin: 0 0 12px;
-    color: var(--cute-primary-dark);
-}
-
-.home-admin-create {
-    margin-bottom: 24px;
-}
-
-.home-create-grid {
+.sched-form-grid {
     display: grid;
-    grid-template-columns: 1fr 2fr;
-    gap: 14px;
-    margin-bottom: 12px;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px 14px;
+    margin-bottom: 8px;
 }
 
-@media (max-width: 600px) {
-    .home-create-grid {
+.sched-field label,
+.sched-slots-label {
+    display: block;
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: #64748b;
+    margin-bottom: 4px;
+}
+
+.sched-field input,
+.sched-field textarea {
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.sched-field-span2 {
+    grid-column: span 2;
+}
+
+.sched-field-full {
+    grid-column: 1 / -1;
+}
+
+@media (max-width: 560px) {
+    .sched-form-grid {
         grid-template-columns: 1fr;
+    }
+
+    .sched-field-span2 {
+        grid-column: span 1;
     }
 }
 
-.home-slot-header {
-    margin-top: 16px;
+.sched-slots-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 14px;
+    margin-bottom: 8px;
 }
 
-.home-slot-container {
+.sched-slot-box {
     margin-bottom: 16px;
 }
 
-.home-time-slot-row {
+.sched-slot-row {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
@@ -1462,54 +1465,212 @@ button.btn-google:hover {
     margin-bottom: 8px;
 }
 
-.home-cap-input {
-    width: 4.5rem;
+.sched-cap {
+    width: 4rem;
 }
 
-.home-calendar-toolbar {
+.sched-submit {
+    border-radius: 14px;
+}
+
+.sched-calendar-section {
+    margin-bottom: 28px;
+}
+
+.sched-cal-toolbar {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
     justify-content: space-between;
     gap: 12px;
-    margin-bottom: 16px;
+    margin-bottom: 12px;
 }
 
-.home-event-card {
-    margin-bottom: 14px;
-    text-align: left;
-}
-
-.home-event-head {
+.sched-month-nav {
     display: flex;
-    flex-wrap: wrap;
-    align-items: baseline;
-    justify-content: space-between;
-    gap: 8px;
-    margin-bottom: 8px;
+    align-items: center;
+    gap: 10px;
 }
 
-.home-event-title {
-    margin: 0;
-    font-size: 1.05rem;
+.sched-month-label {
+    font-weight: 800;
+    font-size: 0.95rem;
+    min-width: 7.5em;
+    text-align: center;
+    color: var(--cute-text);
+}
+
+.sched-cal-wrap {
+    background: rgba(255, 255, 255, 0.96);
+    border: 1px solid rgba(233, 213, 255, 0.55);
+    border-radius: 18px;
+    padding: 12px 10px 14px;
+    box-shadow: var(--cute-shadow-sm);
+}
+
+.sched-cal-weekdays {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 4px;
+    margin-bottom: 6px;
+}
+
+.sched-cal-wd {
+    text-align: center;
+    font-size: 0.7rem;
+    font-weight: 800;
+    color: #94a3b8;
+    padding: 4px 0;
+}
+
+.sched-cal-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 5px;
+}
+
+.sched-cal-cell {
+    aspect-ratio: 1;
+    max-height: 72px;
+    border-radius: 12px;
+    border: 1px solid rgba(226, 232, 240, 0.85);
+    background: rgba(248, 250, 252, 0.75);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    padding: 6px 4px 4px;
+    text-decoration: none;
+    color: inherit;
+    transition: background 0.15s ease, border-color 0.15s ease, transform 0.12s ease;
+}
+
+.sched-cal-cell:hover {
+    background: rgba(237, 233, 254, 0.55);
+    border-color: rgba(167, 139, 250, 0.45);
+    transform: translateY(-1px);
+}
+
+.sched-cal-cell.is-today {
+    border-color: rgba(124, 58, 237, 0.55);
+    background: rgba(237, 233, 254, 0.45);
+}
+
+.sched-cal-cell.is-selected {
+    border-color: rgba(124, 58, 237, 0.95);
+    box-shadow: 0 0 0 2px rgba(124, 58, 237, 0.2);
+}
+
+.sched-cal-cell.is-other-month {
+    opacity: 0.35;
+    pointer-events: none;
+}
+
+.sched-cal-num {
+    font-size: 0.8rem;
     font-weight: 800;
     color: var(--cute-text);
 }
 
-.home-event-meta {
-    font-size: 0.8125rem;
-    font-weight: 600;
+.sched-cal-dots {
+    display: flex;
+    gap: 3px;
+    margin-top: auto;
+    padding-bottom: 2px;
+}
+
+.sched-dot {
+    display: block;
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #a78bfa, #e879f9);
+}
+
+.sched-sel-banner {
+    margin: 12px 0 0;
+    font-size: 0.82rem;
+    color: var(--cute-muted);
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px 16px;
+}
+
+.sched-link-all {
+    color: #7c3aed;
+    font-weight: 700;
+    text-decoration: none;
+}
+
+.sched-link-all:hover {
+    text-decoration: underline;
+}
+
+.sched-detail-section {
+    margin-top: 8px;
+}
+
+.sched-day-label {
+    font-size: 0.88rem;
+    font-weight: 800;
+    color: #64748b;
+    margin: 18px 0 10px;
+    padding-bottom: 4px;
+    border-bottom: 1px dashed rgba(203, 213, 225, 0.85);
+}
+
+.sched-event-card {
+    margin-bottom: 14px;
+    border-radius: 16px;
+    border: 1px solid rgba(233, 213, 255, 0.5);
+    padding: 16px 18px;
+    text-align: left;
+}
+
+.sched-event-top {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+.sched-event-title {
+    margin: 0;
+    font-size: 1.02rem;
+    font-weight: 800;
+    color: var(--cute-text);
+}
+
+.sched-event-time {
+    font-size: 0.8rem;
+    font-weight: 700;
     color: var(--cute-muted);
 }
 
-.home-event-desc {
-    margin: 0 0 12px;
-    font-size: 0.9rem;
+.sched-meta {
+    margin: 0 0 6px;
+    font-size: 0.86rem;
     color: #475569;
-    line-height: 1.5;
 }
 
-.home-slot-list {
+.sched-meta-k {
+    font-weight: 800;
+    color: #7c3aed;
+    margin-right: 6px;
+}
+
+.sched-notes {
+    margin: 0 0 12px;
+    font-size: 0.85rem;
+    color: #64748b;
+    line-height: 1.5;
+    white-space: pre-wrap;
+}
+
+.sched-slot-list {
     list-style: none;
     margin: 0;
     padding: 0;
@@ -1518,33 +1679,45 @@ button.btn-google:hover {
     gap: 8px;
 }
 
-.home-slot-item {
+.sched-slot-line {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 10px 14px;
-    padding: 10px 14px;
-    background: rgba(248, 250, 252, 0.9);
+    gap: 8px 12px;
+    padding: 10px 12px;
+    background: rgba(248, 250, 252, 0.95);
     border-radius: 12px;
     border: 1px solid rgba(226, 232, 240, 0.9);
 }
 
-.home-slot-time {
+.sched-slot-t {
     font-weight: 800;
-    font-size: 0.95rem;
-    min-width: 3.2em;
+    font-size: 0.92rem;
+    min-width: 3em;
 }
 
-.home-slot-cap {
-    font-size: 0.8125rem;
+.sched-slot-c {
+    font-size: 0.8rem;
     color: var(--cute-muted);
     flex: 1 1 auto;
 }
 
-.home-slot-action {
+.sched-slot-act {
     flex: 0 0 auto;
 }
 
-.home-guest-actions {
-    margin-bottom: 24px;
+.sched-empty-inline {
+    margin: 0;
+    font-size: 0.85rem;
+    color: var(--cute-muted);
+}
+
+.sched-empty-dashed {
+    text-align: center;
+    padding: 28px 16px;
+    font-size: 0.9rem;
+    color: var(--cute-muted);
+    border: 2px dashed rgba(203, 213, 225, 0.75);
+    border-radius: 16px;
+    background: rgba(255, 255, 255, 0.5);
 }

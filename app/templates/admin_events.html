@@ -33,7 +33,7 @@
             {% for event in g.items %}
             {% set st = event_stats.get(event.id, {"pending": 0, "approved": 0}) %}
             <li class="app-row-compact admin-event-row">
-                <span class="app-row-title" title="{{ event.title }}">{{ event.title }}</span>
+                <span class="app-row-title" title="{{ event.title }}{% if event.location %} · {{ event.location }}{% endif %}">{{ event.title }}{% if event.location %} <span class="text-muted">· {{ event.location }}</span>{% endif %}</span>
                 <span class="app-row-datetime">{{ event_time_labels[event.id] }}</span>
                 <span class="app-row-stats">
                     검토 대기 <strong>{{ st.pending }}</strong>명

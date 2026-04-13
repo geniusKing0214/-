@@ -50,6 +50,7 @@ class Event(Base):
     id = Column(Integer, primary_key=True, index=True)
     title = Column(String(200), nullable=False)
     event_date = Column(Date, nullable=False, index=True)
+    location = Column(String(300), nullable=True)
     description = Column(Text, nullable=True)
     created_by = Column(Integer, ForeignKey("users.id"), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)

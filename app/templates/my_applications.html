@@ -42,7 +42,7 @@
                     <span class="badge">{{ app.status }}</span>
                     {% endif %}
                 </span>
-                <a href="/?group=day#event-{{ app.event.id }}" class="btn btn-primary btn-sm app-row-action"><span class="btn-label-long">일정 보기</span><span class="btn-label-short">보기</span></a>
+                <a href="/?month={{ app.event.event_date.strftime('%Y-%m') }}&sel={{ app.event.event_date.isoformat() }}#event-{{ app.event.id }}" class="btn btn-primary btn-sm app-row-action"><span class="btn-label-long">일정 보기</span><span class="btn-label-short">보기</span></a>
             </li>
             {% endfor %}
         </ul>

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import calendar as calendar_mod
 import logging
 import os
 import secrets
@@ -15,7 +16,13 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 from starlette.middleware.sessions import SessionMiddleware
 
-from app.database import Base, SessionLocal, engine, ensure_sqlite_migrations
+from app.database import (
+    Base,
+    SessionLocal,
+    engine,
+    ensure_events_location_column,
+    ensure_sqlite_migrations,
+)
 from app.firebase_init import (
     firebase_google_login_ready,
     get_firebase_web_config,
@@ -108,6 +115,7 @@ async def _http_exception_browser_redirect(request: Request, exc: HTTPException)
 
 Base.metadata.create_all(bind=engine)
 ensure_sqlite_migrations(engine)
+ensure_events_location_column(engine)
 
 app.include_router(member_schedule_router)
 
@@ -301,6 +309,43 @@ def _event_time_label(event: Event) -> str:
         return event.event_date.strftime("%Y-%m-%d")
     t = min(s.start_time for s in event.slots)
     return f"{event.event_date.strftime('%Y-%m-%d')} {t.strftime('%H:%M')}"
+
+
+def _parse_home_month(raw: Optional[str]) -> tuple[int, int]:
+    t = date.today()
+    if not raw or not str(raw).strip():
+        return t.year, t.month
+    s = str(raw).strip()
+    try:
+        if len(s) >= 7 and s[4] == "-":
+            y = int(s[:4])
+            m = int(s[5:7])
+            if 1 <= m <= 12 and 2000 <= y <= 2100:
+                return y, m
+    except ValueError:
+        pass
+    return t.year, t.month
+
+
+def _shift_calendar_month(year: int, month: int, delta: int) -> tuple[int, int]:
+    m = month + delta
+    y = year
+    while m > 12:
+        m -= 12
+        y += 1
+    while m < 1:
+        m += 12
+        y -= 1
+    return y, m
+
+
+def _parse_sel_day(raw: Optional[str]) -> Optional[date]:
+    if not raw or not str(raw).strip():
+        return None
+    try:
+        return datetime.strptime(str(raw).strip()[:10], "%Y-%m-%d").date()
+    except ValueError:
+        return None
 
 
 def _home_slots_ui(db: Session, user: Optional[User], event: Event) -> list[dict[str, Any]]:
@@ -669,64 +714,94 @@ def profile_update(
 @app.get("/", response_class=HTMLResponse)
 def index(
     request: Request,
-    group: str = Query("day"),
+    month: Optional[str] = Query(None),
+    sel: Optional[str] = Query(None),
     db: Session = Depends(get_db),
 ):
     current_user = get_current_user(request, db)
-    if group not in ("day", "week"):
-        group = "day"
+    y, m = _parse_home_month(month)
+    month_param = f"{y}-{m:02d}"
+    py, pm = _shift_calendar_month(y, m, -1)
+    ny, nm = _shift_calendar_month(y, m, 1)
+    first = date(y, m, 1)
+    last = date(y, m, calendar_mod.monthrange(y, m)[1])
 
-    today = date.today()
-    events = (
+    events_in_month = (
         db.query(Event)
         .options(joinedload(Event.slots))
-        .filter(Event.event_date >= today)
+        .filter(Event.event_date >= first, Event.event_date <= last)
         .order_by(Event.event_date.asc(), Event.id.asc())
         .all()
     )
-    for e in events:
+    for e in events_in_month:
         e.slots = [s for s in e.slots if s.is_active]
 
-    if group == "week":
-        raw_groups = _group_events_by_week(events)
-    else:
-        raw_groups = _group_events_by_day(events)
+    by_date: dict[date, list[Event]] = {}
+    for e in events_in_month:
+        by_date.setdefault(e.event_date, []).append(e)
 
-    event_groups: list[dict[str, Any]] = []
-    for g in raw_groups:
-        block_items: list[dict[str, Any]] = []
-        for event in g["items"]:
-            block_items.append(
+    cal = calendar_mod.Calendar(firstweekday=0)
+    cal_weeks: list[list[dict[str, Any]]] = []
+    for week in cal.monthdatescalendar(y, m):
+        row: list[dict[str, Any]] = []
+        for d in week:
+            n = len(by_date.get(d, []))
+            row.append(
                 {
-                    "event": event,
-                    "slots_ui": _home_slots_ui(db, current_user, event),
-                    "time_label": _event_time_label(event),
+                    "date": d,
+                    "in_month": d.month == m,
+                    "is_today": d == date.today(),
+                    "event_count": n,
                 }
             )
-        event_groups.append({"label": g["label"], "items": block_items})
+        cal_weeks.append(row)
+
+    sel_day = _parse_sel_day(sel)
+    if sel_day and (sel_day.year, sel_day.month) != (y, m):
+        sel_day = None
+
+    def _blocks(evts: list[Event]) -> list[dict[str, Any]]:
+        return [
+            {
+                "event": e,
+                "slots_ui": _home_slots_ui(db, current_user, e),
+                "time_label": _event_time_label(e),
+            }
+            for e in evts
+        ]
+
+    if sel_day:
+        detail_groups = [
+            {
+                "label": _day_label_ko(sel_day),
+                "blocks": _blocks(by_date.get(sel_day, [])),
+            }
+        ]
+    else:
+        detail_groups = [
+            {
+                "label": _day_label_ko(d),
+                "blocks": _blocks(by_date[d]),
+            }
+            for d in sorted(by_date.keys())
+        ]
+
+    has_detail_blocks = any(g["blocks"] for g in detail_groups)
 
     ctx: dict[str, Any] = {
-        "page_title": "홈 · 스케줄",
-        "group_mode": group,
-        "event_groups": event_groups,
+        "page_title": "스케줄",
+        "cal_year": y,
+        "cal_month": m,
+        "month_param": month_param,
+        "prev_month_param": f"{py}-{pm:02d}",
+        "next_month_param": f"{ny}-{nm:02d}",
+        "cal_weeks": cal_weeks,
+        "weekday_headers": ("월", "화", "수", "목", "금", "토", "일"),
+        "detail_groups": detail_groups,
+        "has_detail_blocks": has_detail_blocks,
+        "sel_day": sel_day,
+        "has_month_events": bool(events_in_month),
     }
-    if current_user and current_user.is_admin:
-        ctx["pending_users_count"] = (
-            db.query(User)
-            .filter(
-                User.is_admin == False,
-                User.approval_status == "pending_approval",
-            )
-            .count()
-        )
-        ctx["pending_applications_count"] = (
-            db.query(Application)
-            .filter(Application.status == "pending")
-            .count()
-        )
-    else:
-        ctx["pending_users_count"] = 0
-        ctx["pending_applications_count"] = 0
 
     return render(
         request,
@@ -1053,6 +1128,7 @@ def create_event(
     request: Request,
     title: str = Form(...),
     event_date: str = Form(...),
+    location: str = Form(""),
     description: str = Form(""),
     slot_times: list[str] = Form(...),
     slot_capacities: list[int] = Form(...),
@@ -1063,9 +1139,12 @@ def create_event(
     except PermissionError:
         return redirect("/login")
 
+    ev_date = datetime.strptime(event_date, "%Y-%m-%d").date()
+    loc = location.strip()
     event = Event(
         title=title.strip(),
-        event_date=datetime.strptime(event_date, "%Y-%m-%d").date(),
+        event_date=ev_date,
+        location=loc if loc else None,
         description=description.strip() if description else "",
         created_by=admin.id,
     )
@@ -1085,7 +1164,7 @@ def create_event(
         )
 
     db.commit()
-    return redirect("/admin/events")
+    return redirect(f"/?month={ev_date.year}-{ev_date.month:02d}&sel={ev_date.isoformat()}")
 
 
 @app.post("/admin/events/{event_id}/delete")

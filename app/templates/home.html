@@ -1,191 +1,171 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="page-wrap home-scheduler-page">
-    <section class="card home-hero">
-        <h1>달력형 신청 스케줄러</h1>
+<div class="sched-page">
+    <header class="sched-hero">
+        <h1 class="sched-title">달력형 신청 스케줄러</h1>
         {% if current_user %}
-        <p class="subtext">
-            <strong>{{ display_name(current_user) }}</strong>님, 환영합니다. 아래에서 일정을 확인하고 슬롯을 신청할 수 있습니다.
-        </p>
+        <p class="sched-greeting"><span class="sched-name">{{ display_name(current_user) }}</span>님, 일정을 달력에서 고른 뒤 슬롯을 신청할 수 있어요.</p>
         {% else %}
-        <p class="subtext">
-            로그인 후 일정 신청·취소를 할 수 있습니다. 모바일에서도 동일하게 이용하세요.
-        </p>
+        <p class="sched-greeting">로그인하면 관리자가 올린 일정에 신청할 수 있어요.</p>
+        <div class="sched-guest-btns">
+            <a href="/login?next={{ ('/?month=' ~ month_param) | urlquote }}" class="btn btn-primary btn-sm">로그인</a>
+            <a href="/register" class="btn btn-outline btn-sm">회원가입</a>
+        </div>
         {% endif %}
-    </section>
+    </header>
 
-    {% if current_user %}
-    <div class="home-quick-grid">
-        <a href="/my-applications" class="home-quick-card">
-            <span class="home-quick-title">내 신청</span>
-            <span class="home-quick-desc">신청·승인 상태</span>
-        </a>
-        <a href="/notifications" class="home-quick-card">
-            <span class="home-quick-title">알림</span>
-            {% if unread_count and unread_count > 0 %}
-            <span class="home-quick-badge">{{ unread_count }}</span>
-            {% else %}
-            <span class="home-quick-desc">새 소식</span>
-            {% endif %}
-        </a>
-        <a href="/profile" class="home-quick-card">
-            <span class="home-quick-title">내 정보</span>
-            <span class="home-quick-desc">닉네임 등</span>
-        </a>
-        <a href="/member/schedules" class="home-quick-card">
-            <span class="home-quick-title">이벤트 스케줄</span>
-            <span class="home-quick-desc">별도 모집 일정</span>
-        </a>
-        {% if current_user.is_admin %}
-        <a href="/admin/events" class="home-quick-card home-quick-card--admin">
-            <span class="home-quick-title">이벤트 관리</span>
-            <span class="home-quick-desc">목록·수정</span>
-        </a>
-        <a href="/admin/operations" class="home-quick-card home-quick-card--admin">
-            <span class="home-quick-title">운영 · 가입 승인</span>
-            {% if pending_users_count and pending_users_count > 0 %}
-            <span class="home-quick-badge home-quick-badge--warn">{{ pending_users_count }}</span>
-            {% else %}
-            <span class="home-quick-desc">신청 검토</span>
-            {% endif %}
-        </a>
-        <a href="/admin/members" class="home-quick-card home-quick-card--admin">
-            <span class="home-quick-title">회원 목록</span>
-            <span class="home-quick-desc">닉네임 관리</span>
-        </a>
-        {% endif %}
-        <a href="/logout" class="home-quick-card home-quick-card--muted">
-            <span class="home-quick-title">로그아웃</span>
-        </a>
-    </div>
-
-    {% if current_user.is_admin and (pending_users_count > 0 or pending_applications_count > 0) %}
-    <div class="home-admin-alerts">
-        {% if pending_users_count > 0 %}
-        <a href="/admin/operations" class="alert admin-alert-link">
-            가입 승인 대기 <strong>{{ pending_users_count }}</strong>명 — 운영 화면에서 처리하세요.
-        </a>
-        {% endif %}
-        {% if pending_applications_count > 0 %}
-        <a href="/admin/operations" class="alert admin-alert-link admin-alert-link--soft">
-            스케줄 신청 검토 대기 <strong>{{ pending_applications_count }}</strong>건
-        </a>
-        {% endif %}
-    </div>
-    {% endif %}
-
-    {% if current_user.is_admin %}
-    <section class="card home-admin-create" aria-labelledby="home-create-schedule">
-        <h2 id="home-create-schedule" class="home-section-title">새 스케줄(이벤트) 생성</h2>
-        <p class="subtext">날짜·제목·시간 슬롯을 등록하면 아래 목록에 표시되고, 회원이 슬롯을 신청할 수 있습니다.</p>
-        <form method="post" action="/admin/events/create" class="home-create-form">
-            <div class="home-create-grid">
-                <div>
-                    <label for="home_ev_date">날짜</label>
-                    <input type="date" id="home_ev_date" name="event_date" required>
+    {% if current_user and current_user.is_admin %}
+    <section class="sched-admin-card card" aria-labelledby="sched-admin-create">
+        <h2 id="sched-admin-create" class="sched-h2">스케줄 생성 <span class="sched-admin-badge">관리자</span></h2>
+        <p class="sched-hint">날짜·이벤트명·장소·특이사항과 시간 슬롯을 등록하면 회원이 아래 달력에서 신청할 수 있어요.</p>
+        <form method="post" action="/admin/events/create" class="sched-create-form">
+            <div class="sched-form-grid">
+                <div class="sched-field">
+                    <label for="ev_date">날짜</label>
+                    <input type="date" id="ev_date" name="event_date" required>
                 </div>
-                <div>
-                    <label for="home_ev_title">이벤트명</label>
-                    <input type="text" id="home_ev_title" name="title" placeholder="예: 4월 정기 모임" required maxlength="200">
+                <div class="sched-field sched-field-span2">
+                    <label for="ev_title">이벤트명</label>
+                    <input type="text" id="ev_title" name="title" placeholder="예: 4월 정기 모임" required maxlength="200">
+                </div>
+                <div class="sched-field sched-field-span2">
+                    <label for="ev_location">장소</label>
+                    <input type="text" id="ev_location" name="location" placeholder="예: OO홀 3층" maxlength="300">
+                </div>
+                <div class="sched-field sched-field-full">
+                    <label for="ev_notes">특이사항</label>
+                    <textarea id="ev_notes" name="description" rows="3" placeholder="준비물, 주의사항 등"></textarea>
                 </div>
             </div>
-            <label for="home_ev_desc">설명</label>
-            <textarea id="home_ev_desc" name="description" rows="3" placeholder="선택"></textarea>
 
-            <div class="slot-header home-slot-header">
-                <label>시간 슬롯</label>
-                <button type="button" class="btn btn-secondary small-btn" id="homeAddSlotBtn">+ 시간 추가</button>
+            <div class="sched-slots-head">
+                <span class="sched-slots-label">시간 슬롯</span>
+                <button type="button" class="btn btn-secondary small-btn" id="schedAddSlot">+ 시간 추가</button>
             </div>
-            <div id="homeTimeSlotContainer" class="home-slot-container">
-                <div class="time-slot-row home-time-slot-row">
+            <div id="schedSlotBox" class="sched-slot-box">
+                <div class="sched-slot-row">
                     <input type="time" name="slot_times" required aria-label="시작 시간">
-                    <input type="number" name="slot_capacities" min="1" value="1" class="home-cap-input" aria-label="정원" title="정원">
-                    <button type="button" class="btn btn-danger small-btn home-remove-slot" aria-label="슬롯 삭제">삭제</button>
+                    <input type="number" name="slot_capacities" min="1" value="1" class="sched-cap" aria-label="정원" title="정원">
+                    <button type="button" class="btn btn-danger small-btn sched-slot-remove" aria-label="삭제">삭제</button>
                 </div>
             </div>
-            <button type="submit" class="btn btn-primary full">스케줄 등록</button>
+            <button type="submit" class="btn btn-primary full sched-submit">스케줄 등록</button>
         </form>
     </section>
     <script>
     (function () {
-        var btn = document.getElementById("homeAddSlotBtn");
-        var container = document.getElementById("homeTimeSlotContainer");
-        if (!btn || !container) return;
-        btn.addEventListener("click", function () {
+        var addBtn = document.getElementById("schedAddSlot");
+        var box = document.getElementById("schedSlotBox");
+        if (!addBtn || !box) return;
+        addBtn.addEventListener("click", function () {
             var row = document.createElement("div");
-            row.className = "time-slot-row home-time-slot-row";
+            row.className = "sched-slot-row";
             row.innerHTML =
                 '<input type="time" name="slot_times" required aria-label="시작 시간">' +
-                '<input type="number" name="slot_capacities" min="1" value="1" class="home-cap-input" aria-label="정원" title="정원">' +
-                '<button type="button" class="btn btn-danger small-btn home-remove-slot" aria-label="슬롯 삭제">삭제</button>';
-            container.appendChild(row);
+                '<input type="number" name="slot_capacities" min="1" value="1" class="sched-cap" aria-label="정원" title="정원">' +
+                '<button type="button" class="btn btn-danger small-btn sched-slot-remove" aria-label="삭제">삭제</button>';
+            box.appendChild(row);
         });
-        container.addEventListener("click", function (e) {
+        box.addEventListener("click", function (e) {
             var t = e.target;
-            if (!t || !t.classList || !t.classList.contains("home-remove-slot")) return;
-            var rows = container.getElementsByClassName("home-time-slot-row");
+            if (!t || !t.classList || !t.classList.contains("sched-slot-remove")) return;
+            var rows = box.querySelectorAll(".sched-slot-row");
             if (rows.length <= 1) {
                 alert("최소 1개의 시간 슬롯이 필요합니다.");
                 return;
             }
-            t.closest(".home-time-slot-row").remove();
+            t.closest(".sched-slot-row").remove();
         });
     })();
     </script>
     {% endif %}
 
-    {% else %}
-    <div class="button-row home-guest-actions">
-        <a href="/login" class="btn btn-primary">로그인</a>
-        <a href="/register" class="btn btn-secondary">회원가입</a>
-    </div>
-    {% endif %}
-
-    <div class="home-calendar-toolbar">
-        <h2 class="home-section-title">일정 · 슬롯 신청</h2>
-        <div class="group-toggle" role="tablist" aria-label="목록 구분">
-            <a
-                href="/?group=day"
-                class="group-toggle-btn {% if group_mode == 'day' %}is-active{% endif %}"
-                {% if group_mode == 'day' %}aria-current="page"{% endif %}
-            >일별</a>
-            <a
-                href="/?group=week"
-                class="group-toggle-btn {% if group_mode == 'week' %}is-active{% endif %}"
-                {% if group_mode == 'week' %}aria-current="page"{% endif %}
-            >주별</a>
-        </div>
-    </div>
-
-    {% if event_groups %}
-    {% for g in event_groups %}
-    <section class="app-group" aria-labelledby="home-group-{{ loop.index }}">
-        <h2 class="app-group-title" id="home-group-{{ loop.index }}">{{ g.label }}</h2>
-        {% for block in g.items %}
-        {% set event = block.event %}
-        <article class="card home-event-card" id="event-{{ event.id }}">
-            <div class="home-event-head">
-                <h3 class="home-event-title">{{ event.title }}</h3>
-                <span class="home-event-meta">{{ block.time_label }}</span>
+    <section class="sched-calendar-section" aria-labelledby="sched-cal-heading">
+        <div class="sched-cal-toolbar">
+            <h2 id="sched-cal-heading" class="sched-h2 sched-h2-inline">일정 달력</h2>
+            <div class="sched-month-nav">
+                <a class="btn btn-outline btn-sm" href="/?month={{ prev_month_param }}{% if sel_day %}&sel={{ sel_day.isoformat() }}{% endif %}" aria-label="이전 달">‹</a>
+                <span class="sched-month-label">{{ cal_year }}년 {{ cal_month }}월</span>
+                <a class="btn btn-outline btn-sm" href="/?month={{ next_month_param }}{% if sel_day %}&sel={{ sel_day.isoformat() }}{% endif %}" aria-label="다음 달">›</a>
             </div>
+        </div>
+
+        <div class="sched-cal-wrap">
+            <div class="sched-cal-weekdays">
+                {% for w in weekday_headers %}
+                <div class="sched-cal-wd">{{ w }}</div>
+                {% endfor %}
+            </div>
+            <div class="sched-cal-grid">
+                {% for week in cal_weeks %}
+                {% for cell in week %}
+                {% if cell.in_month %}
+                <a
+                    href="/?month={{ month_param }}&sel={{ cell.date.isoformat() }}"
+                    class="sched-cal-cell {% if cell.is_today %}is-today{% endif %} {% if sel_day and cell.date == sel_day %}is-selected{% endif %}"
+                >
+                    <span class="sched-cal-num">{{ cell.date.day }}</span>
+                    {% if cell.event_count > 0 %}
+                    {% set dot_n = [cell.event_count, 3] | min %}
+                    <span class="sched-cal-dots" aria-hidden="true">
+                        {% for _ in range(dot_n) %}
+                        <span class="sched-dot"></span>
+                        {% endfor %}
+                    </span>
+                    {% endif %}
+                </a>
+                {% else %}
+                <div class="sched-cal-cell is-other-month" aria-hidden="true">
+                    <span class="sched-cal-num">{{ cell.date.day }}</span>
+                </div>
+                {% endif %}
+                {% endfor %}
+                {% endfor %}
+            </div>
+        </div>
+
+        {% if sel_day %}
+        <p class="sched-sel-banner">
+            <a href="/?month={{ month_param }}" class="sched-link-all">전체 {{ cal_month }}월 일정 보기</a>
+            <span class="sched-sel-text">선택: <strong>{{ sel_day.strftime("%Y-%m-%d") }}</strong></span>
+        </p>
+        {% endif %}
+    </section>
+
+    <section class="sched-detail-section" aria-labelledby="sched-detail-h">
+        <h2 id="sched-detail-h" class="sched-h2">슬롯 신청</h2>
+        {% if has_detail_blocks %}
+        {% for g in detail_groups %}
+        {% if g.blocks %}
+        <h3 class="sched-day-label">{{ g.label }}</h3>
+        {% for block in g.blocks %}
+        {% set event = block.event %}
+        <article class="sched-event-card card" id="event-{{ event.id }}">
+            <div class="sched-event-top">
+                <h4 class="sched-event-title">{{ event.title }}</h4>
+                <time class="sched-event-time" datetime="{{ event.event_date.isoformat() }}">{{ block.time_label }}</time>
+            </div>
+            {% if event.location %}
+            <p class="sched-meta"><span class="sched-meta-k">장소</span> {{ event.location }}</p>
+            {% endif %}
             {% if event.description %}
-            <p class="home-event-desc">{{ event.description }}</p>
+            <p class="sched-notes">{{ event.description }}</p>
             {% endif %}
             {% if block.slots_ui %}
-            <ul class="home-slot-list">
+            <ul class="sched-slot-list">
                 {% for row in block.slots_ui %}
-                <li class="home-slot-item">
-                    <span class="home-slot-time">{{ row.slot.start_time.strftime("%H:%M") }}</span>
-                    <span class="home-slot-cap">신청 {{ row.approved }} / {{ row.capacity }}</span>
-                    <span class="home-slot-action">
+                <li class="sched-slot-line">
+                    <span class="sched-slot-t">{{ row.slot.start_time.strftime("%H:%M") }}</span>
+                    <span class="sched-slot-c">{{ row.approved }} / {{ row.capacity }}명</span>
+                    <span class="sched-slot-act">
                         {% if row.cta == "login" %}
-                        <a href="/login?next={{ ('/?group=' ~ group_mode ~ '#event-' ~ event.id) | urlquote }}" class="btn btn-outline btn-sm">로그인 후 신청</a>
+                        <a href="/login?next={{ ('/?month=' ~ month_param ~ '&sel=' ~ event.event_date.isoformat() ~ '#event-' ~ event.id) | urlquote }}" class="btn btn-outline btn-sm">로그인 후 신청</a>
                         {% elif row.cta == "status" %}
                         {% if row.status == "pending" %}
                         <span class="badge warning">검토 대기</span>
                         {% else %}
-                        <span class="badge success">승인됨</span>
+                        <span class="badge success">승인</span>
                         {% endif %}
                         {% elif row.cta == "full" %}
                         <span class="badge danger">마감</span>
@@ -201,14 +181,21 @@
                 {% endfor %}
             </ul>
             {% else %}
-            <p class="empty-inline">열린 시간 슬롯이 없습니다.</p>
+            <p class="sched-empty-inline">열린 슬롯이 없습니다.</p>
             {% endif %}
         </article>
         {% endfor %}
+        {% endif %}
+        {% endfor %}
+        {% else %}
+        <div class="sched-empty-dashed">
+            {% if has_month_events %}
+            이 날짜에 등록된 일정이 없어요. 다른 날을 눌러 보세요.
+            {% else %}
+            이번 달에 등록된 일정이 없어요.{% if current_user and current_user.is_admin %} 위에서 스케줄을 등록해 보세요.{% endif %}
+            {% endif %}
+        </div>
+        {% endif %}
     </section>
-    {% endfor %}
-    {% else %}
-    <div class="empty-box">예정된 일정이 없습니다.{% if current_user and current_user.is_admin %} 위에서 새 스케줄을 등록해 보세요.{% endif %}</div>
-    {% endif %}
 </div>
 {% endblock %}
