@@ -11,7 +11,6 @@ from fastapi import Depends, FastAPI, Form, HTTPException, Query, Request, statu
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from passlib.context import CryptContext
 from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 from starlette.middleware.sessions import SessionMiddleware
@@ -23,6 +22,7 @@ from app.firebase_init import (
     verify_firebase_id_token,
 )
 from app.models import User, Event, EventSlot, Application, Notification
+from app.password_utils import hash_password, verify_password
 from app.routes.member_schedule import router as member_schedule_router
 from app.template_globals import attach_template_globals, display_name as user_display_name
 
@@ -111,8 +111,6 @@ app.mount("/static", StaticFiles(directory="app/static"), name="static")
 templates = Jinja2Templates(directory="app/templates")
 attach_template_globals(templates)
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
 
 def get_db():
     db = SessionLocal()
@@ -120,21 +118,6 @@ def get_db():
         yield db
     finally:
         db.close()
-
-
-def hash_password(password: str) -> str:
-    password = password.strip()
-    password = password.encode("utf-8")[:72].decode("utf-8", errors="ignore")
-    return pwd_context.hash(password)
-
-
-def verify_password(plain_password: str, hashed_password: str) -> bool:
-    plain_password = plain_password.strip()
-    plain_password = plain_password.encode("utf-8")[:72].decode("utf-8", errors="ignore")
-    try:
-        return pwd_context.verify(plain_password, hashed_password)
-    except Exception:
-        return False
 
 
 def get_current_user(request: Request, db: Session) -> Optional[User]:

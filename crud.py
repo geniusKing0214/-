@@ -1,19 +1,9 @@
 from datetime import datetime
 from sqlalchemy.orm import Session
 from sqlalchemy import func
-from passlib.context import CryptContext
+from app.password_utils import hash_password, verify_password
 
 from . import models
-
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
-
-def hash_password(password: str) -> str:
-    return pwd_context.hash(password)
-
-
-def verify_password(plain: str, hashed: str) -> bool:
-    return pwd_context.verify(plain, hashed)
 
 
 def create_user(db: Session, username: str, password: str, is_admin: bool = False):
