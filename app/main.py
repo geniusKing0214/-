@@ -1,14 +1,11 @@
 from __future__ import annotations
 
-import functools
 import os
 import secrets
 from datetime import date, datetime, timedelta
 from typing import Any, Optional
 from urllib.parse import quote
 
-import httpx
-from authlib.integrations.starlette_client import OAuth
 from fastapi import Depends, FastAPI, Form, HTTPException, Query, Request, status
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
@@ -19,6 +16,11 @@ from sqlalchemy.orm import Session, joinedload
 from starlette.middleware.sessions import SessionMiddleware
 
 from app.database import Base, SessionLocal, engine, ensure_sqlite_migrations
+from app.firebase_init import (
+    firebase_google_login_ready,
+    get_firebase_web_config,
+    verify_firebase_id_token,
+)
 from app.models import User, Event, EventSlot, Application, Notification
 from app.routes.member_schedule import router as member_schedule_router
 from app.template_globals import attach_template_globals, display_name as user_display_name
@@ -68,56 +70,22 @@ def _login_url_with_next(request: Request) -> str:
     return "/login"
 
 
-@functools.cache
-def _get_google_oauth() -> Optional[OAuth]:
-    cid = os.environ.get("GOOGLE_CLIENT_ID", "").strip()
-    csec = os.environ.get("GOOGLE_CLIENT_SECRET", "").strip()
-    if not cid or not csec:
-        return None
-    oauth = OAuth()
-    oauth.register(
-        name="google",
-        client_id=cid,
-        client_secret=csec,
-        server_metadata_url="https://accounts.google.com/.well-known/openid-configuration",
-        client_kwargs={"scope": "openid email profile"},
-    )
-    return oauth
+def _is_social_login_user(user: User) -> bool:
+    return bool(getattr(user, "google_sub", None) or getattr(user, "firebase_uid", None))
 
 
-def _google_auth_href(safe_next: Optional[str]) -> str:
+def _firebase_login_template_ctx(safe_next: Optional[str]) -> dict[str, Any]:
+    ctx: dict[str, Any] = {"firebase_auth_enabled": False}
+    if not firebase_google_login_ready():
+        return ctx
+    cfg = get_firebase_web_config()
+    if not cfg:
+        return ctx
+    ctx["firebase_auth_enabled"] = True
+    ctx["firebase_config"] = cfg
     if safe_next:
-        return f"/auth/google?next={quote(safe_next, safe='')}"
-    return "/auth/google"
-
-
-def _google_oauth_callback_url(request: Request) -> str:
-    explicit = os.environ.get("GOOGLE_REDIRECT_URI", "").strip()
-    if explicit:
-        return explicit
-    base = os.environ.get("PUBLIC_BASE_URL", "").strip().rstrip("/")
-    if base:
-        return f"{base}/auth/google/callback"
-    return str(request.url_for("google_oauth_callback"))
-
-
-async def _google_userinfo_dict(token: dict, request: Request) -> dict[str, Any]:
-    ui = token.get("userinfo")
-    if isinstance(ui, dict) and ui.get("sub"):
-        return ui
-    access = token.get("access_token")
-    if not access:
-        raise ValueError("missing_google_token")
-    async with httpx.AsyncClient() as client:
-        r = await client.get(
-            "https://openidconnect.googleapis.com/v1/userinfo",
-            headers={"Authorization": f"Bearer {access}"},
-        )
-        r.raise_for_status()
-        data = r.json()
-    if not isinstance(data, dict) or not data.get("sub"):
-        raise ValueError("invalid_google_userinfo")
-    return data
+        ctx["login_next"] = safe_next
+    return ctx
 
 
 @app.exception_handler(HTTPException)
@@ -462,13 +430,10 @@ def register(
     db.commit()
     if user.is_admin:
         return redirect("/login")
-    go = _get_google_oauth() is not None
     reg_ctx: dict[str, Any] = {
         "success": "회원가입이 완료되었습니다. 관리자 승인 후 로그인할 수 있습니다.",
-        "google_oauth_enabled": go,
+        **_firebase_login_template_ctx(None),
     }
-    if go:
-        reg_ctx["google_auth_href"] = _google_auth_href(None)
     return render(request, "login.html", reg_ctx, db)
 
 
@@ -478,14 +443,8 @@ def login_page(
     next: Optional[str] = Query(None),
     db: Session = Depends(get_db),
 ):
-    ctx: dict[str, Any] = {}
     safe_next = _safe_internal_redirect_path(next)
-    if safe_next:
-        ctx["login_next"] = safe_next
-    go = _get_google_oauth() is not None
-    ctx["google_oauth_enabled"] = go
-    if go:
-        ctx["google_auth_href"] = _google_auth_href(safe_next)
+    ctx: dict[str, Any] = _firebase_login_template_ctx(safe_next)
     err = (request.query_params.get("error") or "").strip()
     if err == "google_failed":
         ctx["error"] = "Google 로그인에 실패했습니다. 다시 시도해 주세요."
@@ -509,15 +468,12 @@ def login(
     db: Session = Depends(get_db),
 ):
     safe_next = _safe_internal_redirect_path((next or "").strip())
-    go = _get_google_oauth() is not None
-    login_ctx: dict[str, Any] = {"google_oauth_enabled": go}
-    if go:
-        login_ctx["google_auth_href"] = _google_auth_href(safe_next)
+    login_ctx: dict[str, Any] = _firebase_login_template_ctx(safe_next)
     if safe_next:
         login_ctx["login_next"] = safe_next
 
     user = db.query(User).filter(User.username == username.strip()).first()
-    if user and getattr(user, "google_sub", None):
+    if user and _is_social_login_user(user):
         return render(
             request,
             "login.html",
@@ -561,54 +517,70 @@ def logout(request: Request):
     return redirect("/login")
 
 
-@app.get("/auth/google")
-async def google_oauth_start(
-    request: Request, next: Optional[str] = Query(None)
-):
-    oauth = _get_google_oauth()
-    if oauth is None:
-        return redirect("/login")
-    sn = _safe_internal_redirect_path(next)
-    request.session["oauth_next"] = sn or ""
-    redirect_uri = _google_oauth_callback_url(request)
-    return await oauth.google.authorize_redirect(request, redirect_uri)
-
-
-@app.get("/auth/google/callback")
-async def google_oauth_callback(request: Request, db: Session = Depends(get_db)):
-    oauth = _get_google_oauth()
-    if oauth is None:
-        return redirect("/login")
+@app.post("/auth/firebase/session")
+async def firebase_auth_session(request: Request, db: Session = Depends(get_db)):
+    if not firebase_google_login_ready():
+        return JSONResponse(
+            {"ok": False, "detail": "Firebase 로그인이 서버에 설정되지 않았습니다."},
+            status_code=503,
+        )
     try:
-        token = await oauth.google.authorize_access_token(request)
-        userinfo = await _google_userinfo_dict(token, request)
+        body = await request.json()
     except Exception:
-        return redirect("/login?error=google_failed")
+        return JSONResponse(
+            {"ok": False, "detail": "잘못된 요청입니다."},
+            status_code=400,
+        )
+    id_token = (body.get("id_token") or "").strip()
+    next_raw = body.get("next") or ""
+    if not id_token:
+        return JSONResponse(
+            {"ok": False, "detail": "인증 토큰이 없습니다."},
+            status_code=400,
+        )
+    try:
+        decoded = verify_firebase_id_token(id_token)
+    except Exception:
+        return JSONResponse(
+            {"ok": False, "detail": "Google 로그인 토큰을 확인할 수 없습니다."},
+            status_code=401,
+        )
 
-    email = (userinfo.get("email") or "").strip()
-    sub = (userinfo.get("sub") or "").strip()
-    if not email or not sub:
-        return redirect("/login?error=google_email")
-    if userinfo.get("email_verified") is False:
-        return redirect("/login?error=google_unverified")
-
+    email = (decoded.get("email") or "").strip()
+    uid = (decoded.get("uid") or "").strip()
+    if not email or not uid:
+        return JSONResponse(
+            {"ok": False, "detail": "이메일 정보를 받지 못했습니다."},
+            status_code=400,
+        )
+    if decoded.get("email_verified") is False:
+        return JSONResponse(
+            {"ok": False, "detail": "Google 이메일 인증이 완료된 계정만 사용할 수 있습니다."},
+            status_code=403,
+        )
     if len(email) > 255:
-        return redirect("/login?error=google_email")
+        return JSONResponse(
+            {"ok": False, "detail": "이메일 주소가 너무 깁니다."},
+            status_code=400,
+        )
 
-    user = db.query(User).filter(User.google_sub == sub).first()
+    user = db.query(User).filter(User.firebase_uid == uid).first()
     if user is None:
         existing = db.query(User).filter(User.username == email).first()
         if existing is not None:
-            if existing.google_sub and existing.google_sub != sub:
-                return redirect("/login?error=google_failed")
-            existing.google_sub = sub
+            if existing.firebase_uid and existing.firebase_uid != uid:
+                return JSONResponse(
+                    {"ok": False, "detail": "이 이메일은 다른 Google 계정과 연결되어 있습니다."},
+                    status_code=409,
+                )
+            existing.firebase_uid = uid
             user = existing
             db.commit()
         else:
             user = User(
                 username=email,
                 nickname=None,
-                google_sub=sub,
+                firebase_uid=uid,
                 password=hash_password(secrets.token_urlsafe(48)),
                 is_admin=False,
                 approval_status="pending_approval",
@@ -619,15 +591,29 @@ async def google_oauth_callback(request: Request, db: Session = Depends(get_db))
     approval_status = _get_user_approval_status(user)
     if approval_status != "approved":
         if approval_status == "pending_approval":
-            return redirect("/login?error=google_pending")
+            return JSONResponse(
+                {
+                    "ok": False,
+                    "detail": "관리자 승인 대기 중입니다. 승인 후 Google 로그인을 사용할 수 있습니다.",
+                },
+                status_code=403,
+            )
         if approval_status == "rejected":
-            return redirect("/login?error=google_rejected")
-        return redirect("/login?error=google_failed")
+            return JSONResponse(
+                {
+                    "ok": False,
+                    "detail": "계정이 거절되어 Google 로그인을 사용할 수 없습니다.",
+                },
+                status_code=403,
+            )
+        return JSONResponse(
+            {"ok": False, "detail": "계정 상태를 확인할 수 없습니다."},
+            status_code=403,
+        )
 
     request.session["user_id"] = user.id
-    raw_next = request.session.pop("oauth_next", "") or ""
-    dest = _safe_internal_redirect_path(raw_next) or "/"
-    return redirect(dest)
+    dest = _safe_internal_redirect_path(str(next_raw).strip()) or "/"
+    return JSONResponse({"ok": True, "redirect": dest})
 
 
 @app.get("/profile", response_class=HTMLResponse)
@@ -645,7 +631,7 @@ def profile_page(
         {
             "page_title": "프로필",
             "profile_success": updated == "1",
-            "nickname_admin_only": bool(getattr(user, "google_sub", None)),
+            "nickname_admin_only": _is_social_login_user(user),
         },
         db,
         current_user=user,
@@ -661,13 +647,13 @@ def profile_update(
     user = get_current_user(request, db)
     if not user:
         return redirect("/login")
-    if getattr(user, "google_sub", None):
+    if _is_social_login_user(user):
         return render(
             request,
             "profile.html",
             {
                 "page_title": "프로필",
-                "error": "Google로 가입한 계정의 닉네임은 관리자(회원 목록)에서만 변경할 수 있습니다.",
+                "error": "Google 로그인 계정의 닉네임은 관리자(회원 목록)에서만 변경할 수 있습니다.",
                 "nickname_admin_only": True,
             },
             db,

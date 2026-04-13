@@ -31,7 +31,7 @@
                     <tr>
                         <td>{{ m.id }}</td>
                         <td>{{ m.username }}</td>
-                        <td>{% if m.google_sub %}Google{% else %}이메일{% endif %}</td>
+                        <td>{% if m.firebase_uid or m.google_sub %}Google{% else %}이메일{% endif %}</td>
                         <td>
                             <form method="post" action="/admin/members/{{ m.id }}/nickname" class="admin-nick-form">
                                 <input type="text" name="nickname" value="{{ m.nickname or '' }}" maxlength="50" placeholder="비우면 아이디 표시" aria-label="닉네임">

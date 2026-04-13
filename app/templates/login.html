@@ -1,37 +1,80 @@
-{% extends "base.html" %}
-
-{% block content %}
-<section class="card form-card">
-    <h1>로그인</h1>
-
-    {% if error %}
-    <div class="alert error">{{ error }}</div>
-    {% endif %}
-
-    {% if success %}
-    <div class="alert success">{{ success }}</div>
-    {% endif %}
-
-    <form method="post" action="/login">
-        {% if login_next %}
-        <input type="hidden" name="next" value="{{ login_next }}">
-        {% endif %}
-        <label for="username">이메일</label>
-        <input type="email" id="username" name="username" placeholder="example@email.com" required autocomplete="username">
-
-        <label for="password">비밀번호</label>
-        <input type="password" id="password" name="password" placeholder="비밀번호 입력" required autocomplete="current-password">
-
-        <button type="submit" class="btn btn-primary full">로그인</button>
-    </form>
-
-    {% if google_oauth_enabled %}
-    <div class="oauth-divider"><span>또는</span></div>
-    <a href="{{ google_auth_href }}" class="btn btn-google full">Google로 계속하기</a>
-    {% endif %}
-
-    <p class="form-bottom">
-        계정이 없나요? <a href="/register">회원가입</a>
-    </p>
-</section>
-{% endblock %}
+{% extends "base.html" %}
+
+{% block content %}
+<section class="card form-card">
+    <h1>로그인</h1>
+
+    {% if error %}
+    <div class="alert error">{{ error }}</div>
+    {% endif %}
+
+    {% if success %}
+    <div class="alert success">{{ success }}</div>
+    {% endif %}
+
+    <form method="post" action="/login">
+        {% if login_next %}
+        <input type="hidden" name="next" value="{{ login_next }}">
+        {% endif %}
+        <label for="username">이메일</label>
+        <input type="email" id="username" name="username" placeholder="example@email.com" required autocomplete="username">
+
+        <label for="password">비밀번호</label>
+        <input type="password" id="password" name="password" placeholder="비밀번호 입력" required autocomplete="current-password">
+
+        <button type="submit" class="btn btn-primary full">로그인</button>
+    </form>
+
+    {% if firebase_auth_enabled %}
+    <div class="oauth-divider"><span>또는</span></div>
+    <button type="button" class="btn btn-google full" id="firebaseGoogleBtn">Google로 계속하기</button>
+    <p class="alert error oauth-inline-error" id="firebaseLoginError" hidden></p>
+    <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+    <script>
+    (function () {
+        var cfg = {{ firebase_config | tojson }};
+        var nextPath = {{ (login_next or "") | tojson }};
+        firebase.initializeApp(cfg);
+        var btn = document.getElementById("firebaseGoogleBtn");
+        var errEl = document.getElementById("firebaseLoginError");
+        if (!btn) return;
+        btn.addEventListener("click", function () {
+            errEl.hidden = true;
+            errEl.textContent = "";
+            var provider = new firebase.auth.GoogleAuthProvider();
+            firebase.auth().signInWithPopup(provider)
+                .then(function (result) { return result.user.getIdToken(); })
+                .then(function (idToken) {
+                    return fetch("/auth/firebase/session", {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json",
+                            "Accept": "application/json"
+                        },
+                        body: JSON.stringify({ id_token: idToken, next: nextPath })
+                    });
+                })
+                .then(function (r) { return r.json().then(function (data) { return { ok: r.ok, data: data }; }); })
+                .then(function (res) {
+                    if (res.ok && res.data.ok && res.data.redirect) {
+                        window.location.href = res.data.redirect;
+                        return;
+                    }
+                    errEl.textContent = (res.data && res.data.detail) ? res.data.detail : "로그인에 실패했습니다.";
+                    errEl.hidden = false;
+                })
+                .catch(function () {
+                    errEl.textContent = "Google 로그인이 취소되었거나 오류가 발생했습니다.";
+                    errEl.hidden = false;
+                });
+        });
+    })();
+    </script>
+    {% endif %}
+
+    <p class="form-bottom">
+        계정이 없나요? <a href="/register">회원가입</a>
+    </p>
+</section>
+{% endblock %}

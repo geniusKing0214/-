@@ -63,6 +63,8 @@ def ensure_sqlite_migrations(engine) -> None:
             conn.execute(text("ALTER TABLE users ADD COLUMN nickname VARCHAR(50)"))
         if "google_sub" not in names:
             conn.execute(text("ALTER TABLE users ADD COLUMN google_sub VARCHAR(255)"))
+        if "firebase_uid" not in names:
+            conn.execute(text("ALTER TABLE users ADD COLUMN firebase_uid VARCHAR(128)"))
 
 
 def get_db():

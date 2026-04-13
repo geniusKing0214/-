@@ -1041,11 +1041,13 @@ textarea {
     white-space: nowrap;
 }
 
-a.btn-google {
+a.btn-google,
+button.btn-google {
     display: flex;
     align-items: center;
     justify-content: center;
     gap: 8px;
+    width: 100%;
     background: #fff;
     color: #1f2937;
     border: 1px solid #d1d5db;
@@ -1054,11 +1056,19 @@ a.btn-google {
     font-weight: 600;
     box-shadow: var(--cute-shadow-sm);
     text-decoration: none;
+    cursor: pointer;
+    font: inherit;
 }
 
-a.btn-google:hover {
+a.btn-google:hover,
+button.btn-google:hover {
     background: #f9fafb;
     border-color: #cbd5e1;
+}
+
+.oauth-inline-error {
+    margin-top: 12px;
+    margin-bottom: 0;
 }
 
 .admin-nick-form {
