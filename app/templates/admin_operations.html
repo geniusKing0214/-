@@ -1,0 +1,131 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="page-wrap admin-members-page">
+    <div class="page-header">
+        <h1>운영 · 회원가입 승인</h1>
+        <div class="admin-members-actions">
+            <a href="/admin/events" class="btn btn-outline btn-sm">이벤트 관리</a>
+            <a href="/admin/members" class="btn btn-outline btn-sm">회원 목록</a>
+            <a href="/" class="btn btn-outline btn-sm">홈으로</a>
+        </div>
+    </div>
+
+    <p class="operations-summary" aria-live="polite">
+        스케줄 신청: 검토 대기 <strong>{{ pending_count }}</strong>건
+        · 승인 <strong>{{ approved_count }}</strong>건
+        · 거절 <strong>{{ rejected_count }}</strong>건
+    </p>
+
+    <section class="card member-list-card" aria-labelledby="ops-pending-users">
+        <h2 class="card-section-title" id="ops-pending-users">가입 승인 대기</h2>
+        {% if pending_users %}
+        <div class="table-scroll">
+            <table class="member-table">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>이메일(로그인)</th>
+                        <th>화면 표시</th>
+                        <th>가입일</th>
+                        <th>처리</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for u in pending_users %}
+                    <tr>
+                        <td>{{ u.id }}</td>
+                        <td>{{ u.username }}</td>
+                        <td>{{ display_name(u) }}</td>
+                        <td class="member-date">{{ u.created_at.strftime("%Y-%m-%d %H:%M") if u.created_at else "—" }}</td>
+                        <td class="operations-actions">
+                            <form method="post" action="/admin/users/{{ u.id }}/approve" class="inline-form">
+                                <button type="submit" class="btn btn-primary btn-sm">승인</button>
+                            </form>
+                            <form method="post" action="/admin/users/{{ u.id }}/reject" class="inline-form">
+                                <button type="submit" class="btn btn-outline btn-sm">거절</button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="empty-inline">승인 대기 중인 회원이 없습니다.</p>
+        {% endif %}
+    </section>
+
+    <section class="card member-list-card" aria-labelledby="ops-applications">
+        <h2 class="card-section-title" id="ops-applications">스케줄 신청</h2>
+        {% if applications %}
+        <div class="table-scroll">
+            <table class="member-table">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>회원</th>
+                        <th>이벤트</th>
+                        <th>슬롯</th>
+                        <th>상태</th>
+                        <th>신청일</th>
+                        <th>처리</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for a in applications %}
+                    <tr>
+                        <td>{{ a.id }}</td>
+                        <td>{{ display_name(a.user) }}</td>
+                        <td>{{ a.event.title }}</td>
+                        <td>{{ a.slot.start_time.strftime("%Y-%m-%d %H:%M") }}</td>
+                        <td>
+                            {% if a.status == "pending" %}
+                            <span class="badge warning">대기</span>
+                            {% elif a.status == "approved" %}
+                            <span class="badge success">승인</span>
+                            {% elif a.status == "rejected" %}
+                            <span class="badge danger">거절</span>
+                            {% else %}
+                            {{ a.status }}
+                            {% endif %}
+                        </td>
+                        <td class="member-date">{{ a.created_at.strftime("%Y-%m-%d %H:%M") if a.created_at else "—" }}</td>
+                        <td class="operations-actions">
+                            {% if a.status == "pending" %}
+                            <form method="post" action="/admin/applications/{{ a.id }}/approve" class="inline-form">
+                                <button type="submit" class="btn btn-primary btn-sm">승인</button>
+                            </form>
+                            <form method="post" action="/admin/applications/{{ a.id }}/reject" class="inline-form">
+                                <button type="submit" class="btn btn-outline btn-sm">거절</button>
+                            </form>
+                            {% else %}
+                            —
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="empty-inline">스케줄 신청 내역이 없습니다.</p>
+        {% endif %}
+    </section>
+
+    {% if notifications %}
+    <section class="card member-list-card" aria-labelledby="ops-notifications">
+        <h2 class="card-section-title" id="ops-notifications">알림 기록</h2>
+        <p class="form-hint" style="margin-top:0">이 페이지를 열면 읽지 않은 알림은 읽음 처리됩니다.</p>
+        <ul class="operations-notify-list">
+            {% for n in notifications %}
+            <li>
+                <span class="member-date">{{ n.created_at.strftime("%Y-%m-%d %H:%M") if n.created_at else "" }}</span>
+                {{ n.message }}
+            </li>
+            {% endfor %}
+        </ul>
+    </section>
+    {% endif %}
+</div>
+{% endblock %}

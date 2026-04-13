@@ -1251,3 +1251,44 @@ button.btn-google:hover {
         font-size: 0.9em;
     }
 }
+
+.operations-summary {
+    margin: 0 0 18px;
+    font-size: 0.9375rem;
+    color: var(--cute-muted);
+}
+
+.card-section-title {
+    margin: 0 0 14px;
+    font-size: 1.05rem;
+}
+
+.operations-actions {
+    white-space: nowrap;
+}
+
+.operations-actions .inline-form {
+    display: inline-block;
+    margin-right: 6px;
+    vertical-align: middle;
+}
+
+.operations-notify-list {
+    list-style: none;
+    margin: 12px 0 0;
+    padding: 0;
+}
+
+.operations-notify-list li {
+    padding: 10px 0;
+    border-bottom: 1px solid rgba(15, 23, 42, 0.06);
+    font-size: 0.9rem;
+}
+
+.operations-notify-list .member-date {
+    display: inline-block;
+    min-width: 8.5em;
+    margin-right: 8px;
+    color: var(--cute-muted);
+    font-size: 0.85rem;
+}

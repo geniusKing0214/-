@@ -30,7 +30,11 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Scheduler App")
 
-_session_secret = os.environ.get("SESSION_SECRET_KEY", "change-this-secret-key")
+_session_secret = (
+    (os.environ.get("SESSION_SECRET_KEY") or "").strip()
+    or (os.environ.get("SECRET_KEY") or "").strip()
+    or "change-this-secret-key"
+)
 _session_https_only = os.environ.get("SESSION_COOKIE_SECURE", "").strip().lower() in (
     "1",
     "true",
@@ -158,6 +162,65 @@ def _get_user_approval_status(user: Optional[User]) -> str:
     if not user:
         return "approved"
     return getattr(user, "approval_status", "approved")
+
+
+def _admin_bootstrap_emails() -> set[str]:
+    raw = (os.environ.get("ADMIN_BOOTSTRAP_EMAILS") or "").strip()
+    if not raw:
+        return set()
+    return {e.strip().lower() for e in raw.split(",") if e.strip()}
+
+
+def _admin_emails_env() -> Optional[set[str]]:
+    """설정되어 있으면(비어 있지 않으면) 이 목록만 관리자. 미설정·빈 값이면 None."""
+    raw = (os.environ.get("ADMIN_EMAILS") or "").strip()
+    if not raw:
+        return None
+    return {e.strip().lower() for e in raw.split(",") if e.strip()}
+
+
+def _sync_admin_from_env_emails(db: Session, user: User, email: str) -> None:
+    """ADMIN_EMAILS가 있으면: 목록 이메일만 관리자+승인, 목록 밖은 관리자 해제."""
+    admins = _admin_emails_env()
+    if admins is None:
+        return
+    norm = email.strip().lower()
+    changed = False
+    if norm in admins:
+        if not user.is_admin:
+            user.is_admin = True
+            changed = True
+        if user.approval_status != "approved":
+            user.approval_status = "approved"
+            changed = True
+    else:
+        if user.is_admin:
+            user.is_admin = False
+            changed = True
+    if changed:
+        _set_if_present(user, "updated_at", datetime.utcnow())
+        db.commit()
+
+
+def _maybe_auto_approve_admin(db: Session, user: User, email: str) -> None:
+    """ADMIN_EMAILS 미사용 시에만: 부트스트랩 이메일이거나 DB에 회원이 한 명뿐이면 승인+관리자."""
+    if _admin_emails_env() is not None:
+        return
+    norm = email.strip().lower()
+    boot = _admin_bootstrap_emails()
+    sole_account = db.query(User).count() == 1
+    if not ((boot and norm in boot) or sole_account):
+        return
+    changed = False
+    if user.approval_status != "approved":
+        user.approval_status = "approved"
+        changed = True
+    if not user.is_admin:
+        user.is_admin = True
+        changed = True
+    if changed:
+        _set_if_present(user, "updated_at", datetime.utcnow())
+        db.commit()
 
 
 _WEEKDAY_KO = ("월", "화", "수", "목", "금", "토", "일")
@@ -442,6 +505,9 @@ async def firebase_auth_session(request: Request, db: Session = Depends(get_db))
                 )
                 db.add(user)
                 db.commit()
+
+        _sync_admin_from_env_emails(db, user, email)
+        _maybe_auto_approve_admin(db, user, email)
 
         approval_status = _get_user_approval_status(user)
         if approval_status != "approved":
@@ -968,6 +1034,7 @@ def admin_operations(request: Request, db: Session = Depends(get_db)):
         request,
         "admin_operations.html",
         {
+            "page_title": "운영 · 회원가입 승인",
             "applications": applications,
             "pending_users": pending_users,
             "notifications": notifications,

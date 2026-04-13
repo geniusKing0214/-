@@ -75,11 +75,21 @@ def get_firebase_web_config() -> Optional[dict[str, str]]:
     project_id = os.environ.get("FIREBASE_PROJECT_ID", "").strip()
     if not api_key or not auth_domain or not project_id:
         return None
-    return {
+    cfg: dict[str, str] = {
         "apiKey": api_key,
         "authDomain": auth_domain,
         "projectId": project_id,
     }
+    app_id = os.environ.get("FIREBASE_APP_ID", "").strip()
+    if app_id:
+        cfg["appId"] = app_id
+    sender = os.environ.get("FIREBASE_MESSAGING_SENDER_ID", "").strip()
+    if sender:
+        cfg["messagingSenderId"] = sender
+    bucket = os.environ.get("FIREBASE_STORAGE_BUCKET", "").strip()
+    if bucket:
+        cfg["storageBucket"] = bucket
+    return cfg
 
 
 def firebase_google_login_ready() -> bool:
