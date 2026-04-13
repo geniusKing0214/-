@@ -303,6 +303,64 @@ def _event_time_label(event: Event) -> str:
     return f"{event.event_date.strftime('%Y-%m-%d')} {t.strftime('%H:%M')}"
 
 
+def _home_slots_ui(db: Session, user: Optional[User], event: Event) -> list[dict[str, Any]]:
+    """홈 화면 슬롯별 신청 버튼/상태."""
+    slots = sorted(
+        [s for s in event.slots if s.is_active],
+        key=lambda s: s.start_time,
+    )
+    if not slots:
+        return []
+    slot_ids = [s.id for s in slots]
+    approved_rows = (
+        db.query(Application.slot_id, func.count(Application.id))
+        .filter(
+            Application.slot_id.in_(slot_ids),
+            Application.status == "approved",
+        )
+        .group_by(Application.slot_id)
+        .all()
+    )
+    approved_by_slot = {int(sid): int(n) for sid, n in approved_rows}
+
+    my_by_slot: dict[int, Application] = {}
+    if user:
+        for app in (
+            db.query(Application)
+            .filter(
+                Application.user_id == user.id,
+                Application.slot_id.in_(slot_ids),
+            )
+            .order_by(Application.id.desc())
+            .all()
+        ):
+            if app.slot_id not in my_by_slot:
+                my_by_slot[app.slot_id] = app
+
+    out: list[dict[str, Any]] = []
+    for slot in slots:
+        approved = approved_by_slot.get(slot.id, 0)
+        full = approved >= slot.capacity
+        my = my_by_slot.get(slot.id)
+        row: dict[str, Any] = {
+            "slot": slot,
+            "approved": approved,
+            "capacity": slot.capacity,
+            "full": full,
+        }
+        if not user:
+            row["cta"] = "login"
+        elif my and my.status in ("pending", "approved"):
+            row["cta"] = "status"
+            row["status"] = my.status
+        elif full:
+            row["cta"] = "full"
+        else:
+            row["cta"] = "apply"
+        out.append(row)
+    return out
+
+
 def _group_events_by_day(events: list[Event]) -> list[dict[str, Any]]:
     events_sorted = sorted(events, key=_event_sort_dt)
     order: list[date] = []
@@ -609,12 +667,71 @@ def profile_update(
 
 
 @app.get("/", response_class=HTMLResponse)
-def index(request: Request, db: Session = Depends(get_db)):
+def index(
+    request: Request,
+    group: str = Query("day"),
+    db: Session = Depends(get_db),
+):
     current_user = get_current_user(request, db)
+    if group not in ("day", "week"):
+        group = "day"
+
+    today = date.today()
+    events = (
+        db.query(Event)
+        .options(joinedload(Event.slots))
+        .filter(Event.event_date >= today)
+        .order_by(Event.event_date.asc(), Event.id.asc())
+        .all()
+    )
+    for e in events:
+        e.slots = [s for s in e.slots if s.is_active]
+
+    if group == "week":
+        raw_groups = _group_events_by_week(events)
+    else:
+        raw_groups = _group_events_by_day(events)
+
+    event_groups: list[dict[str, Any]] = []
+    for g in raw_groups:
+        block_items: list[dict[str, Any]] = []
+        for event in g["items"]:
+            block_items.append(
+                {
+                    "event": event,
+                    "slots_ui": _home_slots_ui(db, current_user, event),
+                    "time_label": _event_time_label(event),
+                }
+            )
+        event_groups.append({"label": g["label"], "items": block_items})
+
+    ctx: dict[str, Any] = {
+        "page_title": "홈 · 스케줄",
+        "group_mode": group,
+        "event_groups": event_groups,
+    }
+    if current_user and current_user.is_admin:
+        ctx["pending_users_count"] = (
+            db.query(User)
+            .filter(
+                User.is_admin == False,
+                User.approval_status == "pending_approval",
+            )
+            .count()
+        )
+        ctx["pending_applications_count"] = (
+            db.query(Application)
+            .filter(Application.status == "pending")
+            .count()
+        )
+    else:
+        ctx["pending_users_count"] = 0
+        ctx["pending_applications_count"] = 0
+
     return render(
         request,
         "home.html",
-        {},
+        ctx,
         db,
         current_user=current_user,
     )
@@ -779,7 +896,7 @@ def notifications_page(request: Request, db: Session = Depends(get_db)):
     return render(
         request,
         "notifications.html",
-        {"notifications": notifications},
+        {"page_title": "알림", "notifications": notifications},
         db,
         current_user=user,
     )
