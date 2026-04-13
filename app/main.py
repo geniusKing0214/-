@@ -1,10 +1,14 @@
 from __future__ import annotations
 
+import functools
 import os
+import secrets
 from datetime import date, datetime, timedelta
 from typing import Any, Optional
 from urllib.parse import quote
 
+import httpx
+from authlib.integrations.starlette_client import OAuth
 from fastapi import Depends, FastAPI, Form, HTTPException, Query, Request, status
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
@@ -62,6 +66,58 @@ def _login_url_with_next(request: Request) -> str:
     if safe:
         return f"/login?next={quote(safe, safe='')}"
     return "/login"
+
+
+@functools.cache
+def _get_google_oauth() -> Optional[OAuth]:
+    cid = os.environ.get("GOOGLE_CLIENT_ID", "").strip()
+    csec = os.environ.get("GOOGLE_CLIENT_SECRET", "").strip()
+    if not cid or not csec:
+        return None
+    oauth = OAuth()
+    oauth.register(
+        name="google",
+        client_id=cid,
+        client_secret=csec,
+        server_metadata_url="https://accounts.google.com/.well-known/openid-configuration",
+        client_kwargs={"scope": "openid email profile"},
+    )
+    return oauth
+
+
+def _google_auth_href(safe_next: Optional[str]) -> str:
+    if safe_next:
+        return f"/auth/google?next={quote(safe_next, safe='')}"
+    return "/auth/google"
+
+
+def _google_oauth_callback_url(request: Request) -> str:
+    explicit = os.environ.get("GOOGLE_REDIRECT_URI", "").strip()
+    if explicit:
+        return explicit
+    base = os.environ.get("PUBLIC_BASE_URL", "").strip().rstrip("/")
+    if base:
+        return f"{base}/auth/google/callback"
+    return str(request.url_for("google_oauth_callback"))
+
+
+async def _google_userinfo_dict(token: dict, request: Request) -> dict[str, Any]:
+    ui = token.get("userinfo")
+    if isinstance(ui, dict) and ui.get("sub"):
+        return ui
+    access = token.get("access_token")
+    if not access:
+        raise ValueError("missing_google_token")
+    async with httpx.AsyncClient() as client:
+        r = await client.get(
+            "https://openidconnect.googleapis.com/v1/userinfo",
+            headers={"Authorization": f"Bearer {access}"},
+        )
+        r.raise_for_status()
+        data = r.json()
+    if not isinstance(data, dict) or not data.get("sub"):
+        raise ValueError("invalid_google_userinfo")
+    return data
 
 
 @app.exception_handler(HTTPException)
@@ -370,6 +426,14 @@ def register(
             db,
         )
 
+    if len(username) > 255:
+        return render(
+            request,
+            "register.html",
+            {"error": "아이디(이메일)는 255자 이하로 입력해주세요."},
+            db,
+        )
+
     if len(password) < 4:
         return render(
             request,
@@ -398,12 +462,14 @@ def register(
     db.commit()
     if user.is_admin:
         return redirect("/login")
-    return render(
-        request,
-        "login.html",
-        {"success": "회원가입이 완료되었습니다. 관리자 승인 후 로그인할 수 있습니다."},
-        db,
-    )
+    go = _get_google_oauth() is not None
+    reg_ctx: dict[str, Any] = {
+        "success": "회원가입이 완료되었습니다. 관리자 승인 후 로그인할 수 있습니다.",
+        "google_oauth_enabled": go,
+    }
+    if go:
+        reg_ctx["google_auth_href"] = _google_auth_href(None)
+    return render(request, "login.html", reg_ctx, db)
 
 
 @app.get("/login", response_class=HTMLResponse)
@@ -416,6 +482,21 @@ def login_page(
     safe_next = _safe_internal_redirect_path(next)
     if safe_next:
         ctx["login_next"] = safe_next
+    go = _get_google_oauth() is not None
+    ctx["google_oauth_enabled"] = go
+    if go:
+        ctx["google_auth_href"] = _google_auth_href(safe_next)
+    err = (request.query_params.get("error") or "").strip()
+    if err == "google_failed":
+        ctx["error"] = "Google 로그인에 실패했습니다. 다시 시도해 주세요."
+    elif err == "google_email":
+        ctx["error"] = "Google 계정에서 이메일 정보를 받지 못했습니다."
+    elif err == "google_unverified":
+        ctx["error"] = "Google 이메일 인증이 완료된 계정만 사용할 수 있습니다."
+    elif err == "google_pending":
+        ctx["error"] = "관리자 승인 대기 중입니다. 승인 후 Google 로그인을 사용할 수 있습니다."
+    elif err == "google_rejected":
+        ctx["error"] = "계정이 거절되어 Google 로그인을 사용할 수 없습니다. 관리자에게 문의해 주세요."
     return render(request, "login.html", ctx, db)
 
 
@@ -428,9 +509,25 @@ def login(
     db: Session = Depends(get_db),
 ):
     safe_next = _safe_internal_redirect_path((next or "").strip())
-    login_ctx = {"login_next": safe_next} if safe_next else {}
+    go = _get_google_oauth() is not None
+    login_ctx: dict[str, Any] = {"google_oauth_enabled": go}
+    if go:
+        login_ctx["google_auth_href"] = _google_auth_href(safe_next)
+    if safe_next:
+        login_ctx["login_next"] = safe_next
 
     user = db.query(User).filter(User.username == username.strip()).first()
+    if user and getattr(user, "google_sub", None):
+        return render(
+            request,
+            "login.html",
+            {
+                **login_ctx,
+                "error": "이 계정은 Google 로그인을 사용해 주세요.",
+            },
+            db,
+        )
+
     if not user or not verify_password(password, user.password):
         return render(
             request,
@@ -464,6 +561,75 @@ def logout(request: Request):
     return redirect("/login")
 
 
+@app.get("/auth/google")
+async def google_oauth_start(
+    request: Request, next: Optional[str] = Query(None)
+):
+    oauth = _get_google_oauth()
+    if oauth is None:
+        return redirect("/login")
+    sn = _safe_internal_redirect_path(next)
+    request.session["oauth_next"] = sn or ""
+    redirect_uri = _google_oauth_callback_url(request)
+    return await oauth.google.authorize_redirect(request, redirect_uri)
+
+
+@app.get("/auth/google/callback")
+async def google_oauth_callback(request: Request, db: Session = Depends(get_db)):
+    oauth = _get_google_oauth()
+    if oauth is None:
+        return redirect("/login")
+    try:
+        token = await oauth.google.authorize_access_token(request)
+        userinfo = await _google_userinfo_dict(token, request)
+    except Exception:
+        return redirect("/login?error=google_failed")
+
+    email = (userinfo.get("email") or "").strip()
+    sub = (userinfo.get("sub") or "").strip()
+    if not email or not sub:
+        return redirect("/login?error=google_email")
+    if userinfo.get("email_verified") is False:
+        return redirect("/login?error=google_unverified")
+
+    if len(email) > 255:
+        return redirect("/login?error=google_email")
+
+    user = db.query(User).filter(User.google_sub == sub).first()
+    if user is None:
+        existing = db.query(User).filter(User.username == email).first()
+        if existing is not None:
+            if existing.google_sub and existing.google_sub != sub:
+                return redirect("/login?error=google_failed")
+            existing.google_sub = sub
+            user = existing
+            db.commit()
+        else:
+            user = User(
+                username=email,
+                nickname=None,
+                google_sub=sub,
+                password=hash_password(secrets.token_urlsafe(48)),
+                is_admin=False,
+                approval_status="pending_approval",
+            )
+            db.add(user)
+            db.commit()
+
+    approval_status = _get_user_approval_status(user)
+    if approval_status != "approved":
+        if approval_status == "pending_approval":
+            return redirect("/login?error=google_pending")
+        if approval_status == "rejected":
+            return redirect("/login?error=google_rejected")
+        return redirect("/login?error=google_failed")
+
+    request.session["user_id"] = user.id
+    raw_next = request.session.pop("oauth_next", "") or ""
+    dest = _safe_internal_redirect_path(raw_next) or "/"
+    return redirect(dest)
+
+
 @app.get("/profile", response_class=HTMLResponse)
 def profile_page(
     request: Request,
@@ -479,6 +645,7 @@ def profile_page(
         {
             "page_title": "프로필",
             "profile_success": updated == "1",
+            "nickname_admin_only": bool(getattr(user, "google_sub", None)),
         },
         db,
         current_user=user,
@@ -494,6 +661,18 @@ def profile_update(
     user = get_current_user(request, db)
     if not user:
         return redirect("/login")
+    if getattr(user, "google_sub", None):
+        return render(
+            request,
+            "profile.html",
+            {
+                "page_title": "프로필",
+                "error": "Google로 가입한 계정의 닉네임은 관리자(회원 목록)에서만 변경할 수 있습니다.",
+                "nickname_admin_only": True,
+            },
+            db,
+            current_user=user,
+        )
     nick = nickname.strip()
     if nick and len(nick) < 2:
         return render(
@@ -826,6 +1005,57 @@ def admin_members(request: Request, db: Session = Depends(get_db)):
         db,
         current_user=admin,
     )
+
+
+@app.post("/admin/members/{user_id}/nickname")
+def admin_member_set_nickname(
+    user_id: int,
+    request: Request,
+    nickname: str = Form(""),
+    db: Session = Depends(get_db),
+):
+    try:
+        admin = admin_required(request, db)
+    except PermissionError:
+        return redirect("/login")
+
+    target = db.query(User).filter(User.id == user_id).first()
+    if not target:
+        return redirect("/admin/members")
+
+    nick = nickname.strip()
+    if nick and len(nick) < 2:
+        members = db.query(User).order_by(User.id.asc()).all()
+        return render(
+            request,
+            "admin_members.html",
+            {
+                "page_title": "회원 목록",
+                "members": members,
+                "member_error_id": user_id,
+                "member_error_msg": "닉네임은 2자 이상이거나 비워두세요.",
+            },
+            db,
+            current_user=admin,
+        )
+    if len(nick) > 50:
+        members = db.query(User).order_by(User.id.asc()).all()
+        return render(
+            request,
+            "admin_members.html",
+            {
+                "page_title": "회원 목록",
+                "members": members,
+                "member_error_id": user_id,
+                "member_error_msg": "닉네임은 50자 이하로 입력해주세요.",
+            },
+            db,
+            current_user=admin,
+        )
+
+    target.nickname = nick if nick else None
+    db.commit()
+    return redirect("/admin/members")
 
 
 @app.post("/admin/events/create")

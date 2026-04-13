@@ -25,6 +25,11 @@
         <button type="submit" class="btn btn-primary full">로그인</button>
     </form>
 
+    {% if google_oauth_enabled %}
+    <div class="oauth-divider"><span>또는</span></div>
+    <a href="{{ google_auth_href }}" class="btn btn-google full">Google로 계속하기</a>
+    {% endif %}
+
     <p class="form-bottom">
         계정이 없나요? <a href="/register">회원가입</a>
     </p>

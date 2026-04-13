@@ -1020,6 +1020,76 @@ textarea {
     font-size: 0.8125rem;
 }
 
+.oauth-divider {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 20px 0 16px;
+    color: var(--cute-muted);
+    font-size: 0.8125rem;
+}
+
+.oauth-divider::before,
+.oauth-divider::after {
+    content: "";
+    flex: 1;
+    height: 1px;
+    background: #e5e7eb;
+}
+
+.oauth-divider span {
+    white-space: nowrap;
+}
+
+a.btn-google {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    background: #fff;
+    color: #1f2937;
+    border: 1px solid #d1d5db;
+    border-radius: 12px;
+    padding: 12px 14px;
+    font-weight: 600;
+    box-shadow: var(--cute-shadow-sm);
+    text-decoration: none;
+}
+
+a.btn-google:hover {
+    background: #f9fafb;
+    border-color: #cbd5e1;
+}
+
+.admin-nick-form {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+    max-width: 360px;
+}
+
+.admin-nick-form input[type="text"] {
+    flex: 1;
+    min-width: 120px;
+    margin: 0;
+}
+
+.admin-nick-err {
+    margin: 6px 0 0;
+    font-size: 0.8125rem;
+    color: #b91c1c;
+}
+
+.profile-fields label {
+    display: block;
+    margin-top: 14px;
+}
+
+.profile-fields label:first-of-type {
+    margin-top: 0;
+}
+
 .input-disabled {
     background: #f1f5f9 !important;
     color: #64748b;

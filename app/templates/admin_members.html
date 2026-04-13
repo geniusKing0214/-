@@ -18,7 +18,8 @@
                     <tr>
                         <th>ID</th>
                         <th>로그인 아이디</th>
-                        <th>닉네임</th>
+                        <th>로그인</th>
+                        <th>닉네임 (관리자 설정)</th>
                         <th>화면 표시</th>
                         <th>관리자</th>
                         <th>승인 상태</th>
@@ -30,7 +31,16 @@
                     <tr>
                         <td>{{ m.id }}</td>
                         <td>{{ m.username }}</td>
-                        <td>{% if m.nickname %}{{ m.nickname }}{% else %}—{% endif %}</td>
+                        <td>{% if m.google_sub %}Google{% else %}이메일{% endif %}</td>
+                        <td>
+                            <form method="post" action="/admin/members/{{ m.id }}/nickname" class="admin-nick-form">
+                                <input type="text" name="nickname" value="{{ m.nickname or '' }}" maxlength="50" placeholder="비우면 아이디 표시" aria-label="닉네임">
+                                <button type="submit" class="btn btn-primary btn-sm">저장</button>
+                            </form>
+                            {% if member_error_id == m.id and member_error_msg %}
+                            <p class="admin-nick-err">{{ member_error_msg }}</p>
+                            {% endif %}
+                        </td>
                         <td>{{ display_name(m) }}</td>
                         <td>{% if m.is_admin %}예{% else %}—{% endif %}</td>
                         <td>

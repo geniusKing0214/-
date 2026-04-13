@@ -61,6 +61,8 @@ def ensure_sqlite_migrations(engine) -> None:
         names = {row[1] for row in cols}
         if "nickname" not in names:
             conn.execute(text("ALTER TABLE users ADD COLUMN nickname VARCHAR(50)"))
+        if "google_sub" not in names:
+            conn.execute(text("ALTER TABLE users ADD COLUMN google_sub VARCHAR(255)"))
 
 
 def get_db():

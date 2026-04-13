@@ -20,8 +20,9 @@ class User(Base):
     __tablename__ = "users"
 
     id = Column(Integer, primary_key=True, index=True)
-    username = Column(String(50), unique=True, nullable=False, index=True)
+    username = Column(String(255), unique=True, nullable=False, index=True)
     nickname = Column(String(50), nullable=True)
+    google_sub = Column(String(255), unique=True, nullable=True, index=True)
     password = Column(String(255), nullable=False)
     is_admin = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)
