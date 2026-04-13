@@ -16,6 +16,21 @@ git push -u origin main
 
 GitHub 웹에서 **빈 저장소**를 먼저 만든 뒤 위 주소를 넣으면 됩니다.
 
+## GitHub + Render.com (서버 배포)
+
+코드를 GitHub에 올린 뒤 Render가 빌드·호스팅합니다. 저장소 루트에 `render.yaml` 이 있으면 **Blueprint** 로 한 번에 생성할 수 있습니다.
+
+1. [Render](https://render.com) 가입 후 **Dashboard → New → Blueprint**.
+2. **GitHub 계정 연결** 후 이 프로젝트 저장소를 선택합니다.
+3. `render.yaml` 이 인식되면 서비스 이름·리전 등을 확인하고 **Apply** 합니다.
+4. 배포가 끝나면 표시되는 **`https://han-scheduler.onrender.com`** 형태의 URL로 접속합니다. (이름은 `render.yaml`의 `name` 또는 대시보드에서 변경 가능)
+5. **`SESSION_SECRET_KEY`** 는 Blueprint 적용 시 `generateValue: true` 로 자동 생성됩니다. 필요하면 대시보드 **Environment** 에서 다시 설정할 수 있습니다.
+
+### 비용·DB 유지 안내
+
+- 이 Blueprint는 **SQLite 파일을 유지**하려고 **Persistent Disk (`/data`)** 를 붙입니다. Render 정책상 **Free 인스턴스에는 디스크를 붙일 수 없어**, `plan: starter` 로 되어 있습니다. (요금은 [Render 요금](https://render.com/pricing) 기준)
+- **Free 웹 서비스만** 쓰고 싶다면 `render.yaml` 에서 `disk:` 블록 전체와 필요 시 `plan: free` 로 바꾸세요. 이 경우 **재배포할 때마다 DB가 비어 있을 수 있습니다.**
+
 ## GitHub Actions → Fly.io 자동 배포
 
 1. [Fly.io](https://fly.io) 가입 후 PC에서 `flyctl` 설치 및 `fly auth login`

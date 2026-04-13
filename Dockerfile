@@ -16,6 +16,8 @@ ENV PYTHONUNBUFFERED=1
 # 반드시 영구 볼륨이 마운트된 경로 (docker-compose / fly.toml의 /data 와 일치)
 ENV DATABASE_URL=sqlite:////data/scheduler.db
 
+# Render 등 클라우드는 PORT 환경 변수로 포트를 지정합니다.
+ENV PORT=8000
 EXPOSE 8000
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["sh", "-c", "exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT}"]
