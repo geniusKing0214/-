@@ -1,0 +1,16 @@
+services:
+  web:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: sqlite:////data/scheduler.db
+      SESSION_SECRET_KEY: ${SESSION_SECRET_KEY:-change-me-in-production}
+      # 로컬 HTTP: false. HTTPS 리버스 프록시 뒤: true
+      SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE:-false}
+    volumes:
+      - scheduler_data:/data
+    restart: unless-stopped
+
+volumes:
+  scheduler_data:

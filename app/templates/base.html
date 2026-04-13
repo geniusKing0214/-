@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="format-detection" content="telephone=no">
+    <title>{{ page_title }} | HAN Scheduler</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/style.css?v=20260415b">
+</head>
+<body>
+    <div class="nav-mobile-backdrop" id="navMobileBackdrop" hidden aria-hidden="true"></div>
+
+    <div class="site-header-wrap">
+        <header class="topbar cute-topbar">
+            <div class="topbar-inner">
+                <a href="/" class="logo"><span class="logo-icon" aria-hidden="true">📅</span><span class="logo-text">HAN Scheduler</span></a>
+
+                <div class="topbar-end">
+                    {% if current_user %}
+                    <span class="nav-user nav-user-compact nav-user-topbar">{{ current_user.username }}님</span>
+                    {% endif %}
+                    <button
+                        type="button"
+                        class="nav-menu-toggle"
+                        id="navMenuToggle"
+                        aria-expanded="false"
+                        aria-controls="siteNavPanel"
+                        aria-label="메뉴 열기"
+                    >
+                        <span class="nav-menu-burger" aria-hidden="true"><span></span><span></span><span></span></span>
+                        <span class="nav-menu-toggle-text">메뉴</span>
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <nav class="nav-panel" id="siteNavPanel" hidden aria-label="메뉴 목차">
+            <div class="nav-panel-head">
+                <span class="nav-panel-title">목차</span>
+            </div>
+            <ul class="nav-list" role="list">
+                {% if current_user %}
+                <li class="nav-drawer-user nav-drawer-user--mobile-only">
+                    <span class="nav-user nav-user-block">{{ current_user.username }}님</span>
+                </li>
+                {% endif %}
+                <li class="nav-list-heading"><span>바로가기</span></li>
+                <li><a href="/">홈</a></li>
+                {% if current_user %}
+                <li><a href="/my-applications">내 신청</a></li>
+                <li>
+                    {% if unread_count and unread_count > 0 %}
+                    <a href="/notifications" class="nav-notify">알림 <span class="nav-badge">{{ unread_count }}</span></a>
+                    {% else %}
+                    <a href="/notifications">알림</a>
+                    {% endif %}
+                </li>
+                {% if current_user.is_admin %}
+                <li class="nav-list-heading"><span>관리자</span></li>
+                <li><a href="/admin/events">이벤트 관리</a></li>
+                <li><a href="/admin/operations">운영</a></li>
+                {% endif %}
+                <li class="nav-list-divider" role="presentation"></li>
+                <li><a href="/logout">로그아웃</a></li>
+                {% else %}
+                <li class="nav-list-divider" role="presentation"></li>
+                <li><a href="/login">로그인</a></li>
+                <li><a href="/register">회원가입</a></li>
+                {% endif %}
+            </ul>
+        </nav>
+    </div>
+
+    <main class="page">
+        {% block content %}{% endblock %}
+    </main>
+
+    <script>
+    (function () {
+        var btn = document.getElementById("navMenuToggle");
+        var panel = document.getElementById("siteNavPanel");
+        var backdrop = document.getElementById("navMobileBackdrop");
+        if (!btn || !panel) return;
+
+        function setOpen(open) {
+            if (open) {
+                panel.removeAttribute("hidden");
+                btn.setAttribute("aria-expanded", "true");
+                btn.setAttribute("aria-label", "메뉴 닫기");
+                document.body.classList.add("nav-menu-open");
+                if (backdrop) {
+                    backdrop.removeAttribute("hidden");
+                    backdrop.setAttribute("aria-hidden", "false");
+                }
+            } else {
+                panel.setAttribute("hidden", "");
+                btn.setAttribute("aria-expanded", "false");
+                btn.setAttribute("aria-label", "메뉴 열기");
+                document.body.classList.remove("nav-menu-open");
+                if (backdrop) {
+                    backdrop.setAttribute("hidden", "");
+                    backdrop.setAttribute("aria-hidden", "true");
+                }
+            }
+        }
+
+        btn.addEventListener("click", function (e) {
+            e.stopPropagation();
+            setOpen(panel.hasAttribute("hidden"));
+        });
+
+        if (backdrop) {
+            backdrop.addEventListener("click", function () {
+                setOpen(false);
+            });
+        }
+
+        panel.querySelectorAll("a").forEach(function (a) {
+            a.addEventListener("click", function () {
+                setOpen(false);
+            });
+        });
+
+        document.addEventListener("click", function (e) {
+            if (!panel.hasAttribute("hidden") && !panel.contains(e.target) && !btn.contains(e.target) && !(backdrop && backdrop.contains(e.target))) {
+                setOpen(false);
+            }
+        });
+
+        document.addEventListener("keydown", function (e) {
+            if (e.key === "Escape" && !panel.hasAttribute("hidden")) {
+                setOpen(false);
+                btn.focus();
+            }
+        });
+    })();
+    </script>
+    {% block scripts %}{% endblock %}
+</body>
+</html>

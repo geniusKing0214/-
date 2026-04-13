@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="page-wrap compact-calendar">
+    <div class="page-header">
+        <h1>이벤트 스케줄 목록</h1>
+        <a href="/member/schedules/my/list" class="btn btn-outline">내 신청 내역</a>
+    </div>
+
+    <div class="card-list">
+        {% for schedule in schedules %}
+        {% set current_count = application_counts.get(schedule.id, 0) %}
+        <div class="card">
+            <div class="card-body">
+                <h2>{{ schedule.title }}</h2>
+                <p class="text-muted">{{ schedule.description or "설명 없음" }}</p>
+
+                <div class="info-row"><strong>장소:</strong> {{ schedule.location or "-" }}</div>
+                <div class="info-row"><strong>일시:</strong> {{ schedule.event_datetime.strftime("%Y-%m-%d %H:%M") }}</div>
+                <div class="info-row">
+                    <strong>신청 인원:</strong>
+                    {{ current_count }}{% if schedule.recruit_limit > 0 %} / {{ schedule.recruit_limit }}{% else %} / 무제한{% endif %}
+                </div>
+                <div class="info-row"><strong>상태:</strong> {{ "모집중" if schedule.status == "open" else "마감" }}</div>
+
+                <div class="card-actions">
+                    <a href="/member/schedules/{{ schedule.id }}" class="btn btn-primary">상세보기</a>
+
+                    {% if schedule.id in applied_schedule_ids %}
+                        <span class="badge success">신청완료</span>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        {% else %}
+        <div class="empty-box">
+            등록된 스케줄이 없습니다.
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="page-wrap my-applications-page">
+    <div class="page-header my-applications-header">
+        <h1>내 신청 내역</h1>
+        <div class="my-applications-header-end">
+            <div class="group-toggle" role="tablist" aria-label="목록 구분">
+                <a
+                    href="/member/schedules/my/list?group=day"
+                    class="group-toggle-btn {% if group_mode == 'day' %}is-active{% endif %}"
+                    {% if group_mode == 'day' %}aria-current="page"{% endif %}
+                >일별</a>
+                <a
+                    href="/member/schedules/my/list?group=week"
+                    class="group-toggle-btn {% if group_mode == 'week' %}is-active{% endif %}"
+                    {% if group_mode == 'week' %}aria-current="page"{% endif %}
+                >주별</a>
+            </div>
+            <a href="/member/schedules" class="btn btn-outline btn-sm">이벤트 목록</a>
+        </div>
+    </div>
+
+    {% if application_groups and application_groups|length > 0 %}
+    {% for g in application_groups %}
+    <section class="app-group" aria-labelledby="ms-heading-{{ loop.index }}">
+        <h2 class="app-group-title" id="ms-heading-{{ loop.index }}">{{ g.label }}</h2>
+        <ul class="app-row-list">
+            {% for app in g.items %}
+            <li class="app-row-compact">
+                <span class="app-row-title" title="{{ app.schedule.title }}">{{ app.schedule.title }}</span>
+                <span class="app-row-datetime">
+                    {{ app.schedule.event_datetime.strftime("%Y-%m-%d %H:%M") }}
+                </span>
+                <span class="app-row-badge">
+                    <span class="badge success">신청</span>
+                </span>
+                <a href="/member/schedules/{{ app.schedule.id }}" class="btn btn-primary btn-sm app-row-action"><span class="btn-label-long">상세보기</span><span class="btn-label-short">보기</span></a>
+            </li>
+            {% endfor %}
+        </ul>
+    </section>
+    {% endfor %}
+    {% else %}
+    <div class="empty-box">신청한 이벤트가 없습니다.</div>
+    {% endif %}
+</div>
+{% endblock %}

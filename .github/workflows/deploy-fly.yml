@@ -1,0 +1,25 @@
+# GitHub → Settings → Secrets → Actions → FLY_API_TOKEN
+# Fly 앱·볼륨은 최초 1회 로컬에서 생성해야 합니다 (README.md 참고).
+
+name: Deploy to Fly.io
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Deploy
+        run: flyctl deploy --remote-only
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}

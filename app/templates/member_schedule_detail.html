@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="page-wrap">
+    <div class="detail-card">
+        <h1>{{ schedule.title }}</h1>
+
+        <div class="detail-item"><strong>설명</strong><p>{{ schedule.description or "설명 없음" }}</p></div>
+        <div class="detail-item"><strong>장소</strong><p>{{ schedule.location or "-" }}</p></div>
+        <div class="detail-item"><strong>일시</strong><p>{{ schedule.event_datetime.strftime("%Y-%m-%d %H:%M") }}</p></div>
+        <div class="detail-item">
+            <strong>신청 현황</strong>
+            <p>{{ current_count }}{% if schedule.recruit_limit > 0 %} / {{ schedule.recruit_limit }}{% else %} / 무제한{% endif %}</p>
+        </div>
+        <div class="detail-item">
+            <strong>모집 상태</strong>
+            <p>{{ "모집중" if schedule.status == "open" else "마감" }}</p>
+        </div>
+
+        <div class="detail-actions">
+            {% if my_application %}
+                <form method="post" action="/member/schedules/{{ schedule.id }}/cancel">
+                    <button type="submit" class="btn btn-danger">신청 취소</button>
+                </form>
+            {% else %}
+                {% if schedule.status == "open" %}
+                <form method="post" action="/member/schedules/{{ schedule.id }}/apply">
+                    <button type="submit" class="btn btn-primary">이 이벤트 신청하기</button>
+                </form>
+                {% else %}
+                <button type="button" class="btn btn-disabled" disabled>마감된 이벤트</button>
+                {% endif %}
+            {% endif %}
+
+            <a href="/member/schedules" class="btn btn-outline">목록으로</a>
+        </div>
+    </div>
+</div>
+{% endblock %}

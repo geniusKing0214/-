@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="card form-card wide-card">
+    <h1>스케줄 생성</h1>
+    <p class="subtext">날짜, 이벤트명, 시간 슬롯을 입력해서 일정을 등록하는 화면입니다.</p>
+
+    <form id="scheduleForm">
+        <label for="event_date">날짜</label>
+        <input type="date" id="event_date" name="event_date" required>
+
+        <label for="title">이벤트명</label>
+        <input type="text" id="title" name="title" placeholder="예: 4월 프로모션 이벤트" required>
+
+        <label for="description">설명</label>
+        <textarea id="description" name="description" rows="4" placeholder="이벤트 설명을 입력하세요"></textarea>
+
+        <label for="capacity">정원</label>
+        <input type="number" id="capacity" name="capacity" min="1" placeholder="예: 10">
+
+        <div class="slot-header">
+            <label>시간 슬롯</label>
+            <button type="button" class="btn btn-secondary small-btn" onclick="addTimeSlot()">+ 시간 추가</button>
+        </div>
+
+        <div id="timeSlotContainer">
+            <div class="time-slot-row">
+                <input type="time" name="slot_time[]" required>
+                <button type="button" class="btn btn-danger small-btn" onclick="removeTimeSlot(this)">삭제</button>
+            </div>
+        </div>
+
+        <button type="submit" class="btn btn-primary full">저장</button>
+    </form>
+</section>
+
+<script>
+function addTimeSlot() {
+    const container = document.getElementById("timeSlotContainer");
+
+    const row = document.createElement("div");
+    row.className = "time-slot-row";
+
+    row.innerHTML = `
+        <input type="time" name="slot_time[]" required>
+        <button type="button" class="btn btn-danger small-btn" onclick="removeTimeSlot(this)">삭제</button>
+    `;
+
+    container.appendChild(row);
+}
+
+function removeTimeSlot(button) {
+    const container = document.getElementById("timeSlotContainer");
+    const rows = container.getElementsByClassName("time-slot-row");
+
+    if (rows.length === 1) {
+        alert("최소 1개의 시간 슬롯은 필요합니다.");
+        return;
+    }
+
+    button.parentElement.remove();
+}
+</script>
+{% endblock %}

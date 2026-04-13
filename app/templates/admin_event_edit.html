@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="page-wrap">
+    <div class="page-header">
+        <h1>이벤트 · {{ event.title }}</h1>
+        <a href="/admin/events" class="btn btn-outline btn-sm">목록으로</a>
+    </div>
+
+    <section class="card form-card wide-card">
+        <p class="subtext">
+            날짜·슬롯 수정 UI는 추후 연결할 수 있습니다. 신청 검토·승인은 운영 화면에서 진행하세요.
+        </p>
+        <div class="button-row">
+            <a href="/admin/operations" class="btn btn-primary">신청자 관리 (운영)</a>
+            <a href="/admin/events" class="btn btn-secondary">돌아가기</a>
+        </div>
+    </section>
+</div>
+{% endblock %}

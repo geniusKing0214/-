@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="card form-card">
+    <h1>회원가입</h1>
+
+    {% if error %}
+    <div class="alert error">{{ error }}</div>
+    {% endif %}
+
+    {% if success %}
+    <div class="alert success">{{ success }}</div>
+    {% endif %}
+
+    <form method="post" action="/register">
+        <label for="username">이메일</label>
+        <input
+            type="email"
+            id="username"
+            name="username"
+            placeholder="example@email.com"
+            required
+            autocomplete="username"
+        >
+
+        <label for="name">이름</label>
+        <input
+            type="text"
+            id="name"
+            name="name"
+            placeholder="이름 입력"
+            autocomplete="name"
+        >
+
+        <label for="phone">전화번호</label>
+        <input
+            type="tel"
+            id="phone"
+            name="phone"
+            placeholder="010-0000-0000"
+            autocomplete="tel"
+        >
+
+        <label for="password">비밀번호</label>
+        <input
+            type="password"
+            id="password"
+            name="password"
+            placeholder="비밀번호 입력"
+            required
+            autocomplete="new-password"
+        >
+
+        <label for="password_confirm">비밀번호 확인</label>
+        <input
+            type="password"
+            id="password_confirm"
+            name="password_confirm"
+            placeholder="비밀번호 다시 입력"
+            required
+            autocomplete="new-password"
+        >
+
+        <!-- 🔥 중요: 반드시 type="submit" -->
+        <button type="submit" class="btn btn-primary full">
+            회원가입
+        </button>
+    </form>
+
+    <p class="form-bottom">
+        이미 계정이 있나요?
+        <a href="/login">로그인</a>
+    </p>
+</section>
+{% endblock %}

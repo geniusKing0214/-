@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="card hero">
+    <h1>달력형 신청 스케줄러</h1>
+
+    {% if current_user %}
+        <p class="subtext">
+            <strong>{{ current_user.username }}</strong>님, 로그인 상태입니다.
+        </p>
+        <div class="button-row">
+            <a href="/logout" class="btn btn-secondary">로그아웃</a>
+        </div>
+    {% else %}
+        <p class="subtext">
+            모바일에서도 편하게 로그인하고 일정 신청/취소를 할 수 있는 웹 스케줄러입니다.
+        </p>
+        <div class="button-row">
+            <a href="/login" class="btn btn-primary">로그인</a>
+            <a href="/register" class="btn btn-secondary">회원가입</a>
+        </div>
+    {% endif %}
+</section>
+{% endblock %}
