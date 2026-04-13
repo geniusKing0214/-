@@ -3,9 +3,10 @@ from __future__ import annotations
 import os
 from datetime import date, datetime, timedelta
 from typing import Any, Optional
+from urllib.parse import quote
 
-from fastapi import Depends, FastAPI, Form, Query, Request, status
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi import Depends, FastAPI, Form, HTTPException, Query, Request, status
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from passlib.context import CryptContext
@@ -33,6 +34,49 @@ app.add_middleware(
     same_site="lax",
     https_only=_session_https_only,
 )
+
+
+def _safe_internal_redirect_path(raw: Optional[str]) -> Optional[str]:
+    """Same-origin path only; blocks open redirects (//evil.com)."""
+    if raw is None:
+        return None
+    s = str(raw).strip()
+    if not s.startswith("/") or s.startswith("//") or "://" in s:
+        return None
+    if "\n" in s or "\r" in s:
+        return None
+    return s
+
+
+def _wants_json_only(request: Request) -> bool:
+    """True when client explicitly asks for JSON and not HTML (e.g. fetch API)."""
+    accept = (request.headers.get("accept") or "").lower()
+    return "application/json" in accept and "text/html" not in accept
+
+
+def _login_url_with_next(request: Request) -> str:
+    next_path = request.url.path
+    if request.url.query:
+        next_path = f"{next_path}?{request.url.query}"
+    safe = _safe_internal_redirect_path(next_path)
+    if safe:
+        return f"/login?next={quote(safe, safe='')}"
+    return "/login"
+
+
+@app.exception_handler(HTTPException)
+async def _http_exception_browser_redirect(request: Request, exc: HTTPException):
+    if (
+        exc.status_code == status.HTTP_401_UNAUTHORIZED
+        and request.method == "GET"
+        and not _wants_json_only(request)
+    ):
+        return RedirectResponse(
+            url=_login_url_with_next(request),
+            status_code=status.HTTP_303_SEE_OTHER,
+        )
+    return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
+
 
 Base.metadata.create_all(bind=engine)
 ensure_sqlite_migrations(engine)
@@ -363,8 +407,16 @@ def register(
 
 
 @app.get("/login", response_class=HTMLResponse)
-def login_page(request: Request, db: Session = Depends(get_db)):
-    return render(request, "login.html", {}, db)
+def login_page(
+    request: Request,
+    next: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+):
+    ctx: dict[str, Any] = {}
+    safe_next = _safe_internal_redirect_path(next)
+    if safe_next:
+        ctx["login_next"] = safe_next
+    return render(request, "login.html", ctx, db)
 
 
 @app.post("/login")
@@ -372,14 +424,18 @@ def login(
     request: Request,
     username: str = Form(...),
     password: str = Form(...),
+    next: Optional[str] = Form(None),
     db: Session = Depends(get_db),
 ):
+    safe_next = _safe_internal_redirect_path((next or "").strip())
+    login_ctx = {"login_next": safe_next} if safe_next else {}
+
     user = db.query(User).filter(User.username == username.strip()).first()
     if not user or not verify_password(password, user.password):
         return render(
             request,
             "login.html",
-            {"error": "아이디 또는 비밀번호가 올바르지 않습니다."},
+            {**login_ctx, "error": "아이디 또는 비밀번호가 올바르지 않습니다."},
             db,
         )
 
@@ -394,12 +450,12 @@ def login(
         return render(
             request,
             "login.html",
-            {"error": message},
+            {**login_ctx, "error": message},
             db,
         )
 
     request.session["user_id"] = user.id
-    return redirect("/")
+    return redirect(safe_next or "/")
 
 
 @app.get("/logout")
