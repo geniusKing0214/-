@@ -38,3 +38,26 @@ docker compose up --build -d
 ```
 
 브라우저: http://localhost:8000
+
+## 스케줄·회원 데이터가 배포 후 사라질 때 (SQLite)
+
+원인은 거의 항상 **SQLite 파일이 “영구 볼륨”이 아니라 컨테이너 안 임시 디스크(예: `/app`)에만 생긴 경우**입니다. 이미지가 바뀌면 그 레이어는 초기화됩니다.
+
+- **Docker Compose**: `docker-compose.yml`이 `DATABASE_URL=sqlite:////data/scheduler.db` 와 **볼륨 `scheduler_data:/data`** 를 씁니다.  
+  - `docker compose down -v` 를 쓰면 **볼륨까지 지워져 DB가 통째로 삭제**됩니다. (`-v` 없이 내리기)
+- **Dockerfile 기본값**은 `/data/scheduler.db` 로 맞춰 두었습니다 (이전의 `/app` 기본값은 제거됨).
+- **Fly.io**: `fly.toml`의 `[mounts]` + `fly volumes create scheduler_data` 가 필수입니다.  
+  - SQLite는 **한 앱에 Machine 1대**만 권장: `fly scale count 1`
+- 배포 로그에 `SQLite가 /data 볼륨이 아닌 URL을 사용 중` 경고가 나오면, 플랫폼의 환경 변수·볼륨 마운트를 다시 확인하세요.
+
+### 예전에 쓰던 `scheduler.db` 옮기기 (로컬 → Docker 볼륨)
+
+로컬 프로젝트 루트에 데이터가 있으면, 컨테이너 기동 후 한 번 복사할 수 있습니다.
+
+```bash
+docker compose up -d
+docker cp ./scheduler.db scheduler_app-web-1:/data/scheduler.db
+docker compose restart web
+```
+
+(컨테이너 이름은 `docker compose ps` 로 확인)

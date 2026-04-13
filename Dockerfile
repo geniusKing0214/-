@@ -13,7 +13,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY app ./app
 
 ENV PYTHONUNBUFFERED=1
-ENV DATABASE_URL=sqlite:///./scheduler.db
+# 반드시 영구 볼륨이 마운트된 경로 (docker-compose / fly.toml의 /data 와 일치)
+ENV DATABASE_URL=sqlite:////data/scheduler.db
 
 EXPOSE 8000
 

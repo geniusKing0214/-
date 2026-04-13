@@ -7,6 +7,7 @@
 # fly deploy
 #
 # volume 이름(scheduler_data)·region은 앱과 맞춰야 합니다.
+# SQLite는 한 앱에 Machine 1대만 사용: fly scale count 1
 
 app = "han-scheduler"
 primary_region = "nrt"

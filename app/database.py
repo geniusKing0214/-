@@ -1,8 +1,11 @@
+import logging
 import os
 from pathlib import Path
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, declarative_base
+
+logger = logging.getLogger(__name__)
 
 # 상대 경로(./scheduler.db)는 실행 cwd에 따라 파일이 달라져 DB가 비는 것처럼 보일 수 있음.
 # app/ 상위(프로젝트 루트)에 항상 같은 파일을 쓴다.
@@ -12,6 +15,28 @@ _default_sqlite = _project_root / "scheduler.db"
 _default_url = f"sqlite:///{_default_sqlite.as_posix()}"
 
 DATABASE_URL = os.environ.get("DATABASE_URL", _default_url)
+
+
+def _log_sqlite_persistence_hint(url: str) -> None:
+    """재배포 후 데이터가 비는 경우, 대개 DB 파일이 컨테이너 임시 레이어(/app 등)에만 있을 때이다."""
+    if not url.startswith("sqlite:"):
+        return
+    in_container = Path("/.dockerenv").exists() or bool(os.environ.get("FLY_APP_NAME"))
+    if not in_container:
+        return
+    uses_data_volume = url.startswith("sqlite:////data")
+    if uses_data_volume:
+        logger.info("SQLite DATABASE_URL이 /data 볼륨 경로를 사용합니다.")
+    else:
+        logger.warning(
+            "SQLite가 /data 볼륨이 아닌 URL을 사용 중입니다. "
+            "배포 시마다 DB가 새로 생기면 스케줄·회원 데이터가 사라질 수 있습니다. "
+            "DATABASE_URL=sqlite:////data/scheduler.db 와 Docker/Fly의 /data 마운트를 확인하세요. "
+            "현재=%r",
+            url,
+        )
+
+_log_sqlite_persistence_hint(DATABASE_URL)
 
 engine = create_engine(
     DATABASE_URL,
