@@ -72,7 +72,17 @@
                     });
                 })
                 .then(function (r) {
-                    return r.json().then(function (data) {
+                    return r.text().then(function (text) {
+                        var data = {};
+                        try {
+                            data = text ? JSON.parse(text) : {};
+                        } catch (e) {
+                            data = {
+                                detail: r.status >= 500
+                                    ? "서버가 오류 페이지(HTML)를 반환했습니다. Render 로그에서 원인을 확인해 주세요."
+                                    : (text ? text.slice(0, 200) : "응답을 해석할 수 없습니다.")
+                            };
+                        }
                         return { ok: r.ok, status: r.status, data: data };
                     });
                 })
@@ -84,6 +94,9 @@
                     var msg = (res.data && res.data.detail) ? res.data.detail : "로그인에 실패했습니다.";
                     if (!serverReady && res.status === 503) {
                         msg = "서버에 Firebase 서비스 계정이 설정되지 않았습니다. FIREBASE_SERVICE_ACCOUNT_JSON 또는 FIREBASE_CREDENTIALS_JSON(또는 FIREBASE_JSON)을 Render Secret에 넣었는지 확인해 주세요.";
+                    }
+                    if (res.status === 500 && res.data && res.data.detail) {
+                        msg = res.data.detail;
                     }
                     showErr(msg);
                 })

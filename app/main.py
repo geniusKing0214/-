@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import os
 import secrets
 from datetime import date, datetime, timedelta
@@ -25,6 +26,7 @@ from app.models import User, Event, EventSlot, Application, Notification
 from app.routes.member_schedule import router as member_schedule_router
 from app.template_globals import attach_template_globals, display_name as user_display_name
 
+logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Scheduler App")
 
@@ -385,101 +387,118 @@ def logout(request: Request):
 
 @app.post("/auth/firebase/session")
 async def firebase_auth_session(request: Request, db: Session = Depends(get_db)):
-    if not firebase_google_login_ready():
-        return JSONResponse(
-            {"ok": False, "detail": "Firebase 로그인이 서버에 설정되지 않았습니다."},
-            status_code=503,
-        )
     try:
-        body = await request.json()
-    except Exception:
-        return JSONResponse(
-            {"ok": False, "detail": "잘못된 요청입니다."},
-            status_code=400,
-        )
-    id_token = (body.get("id_token") or "").strip()
-    next_raw = body.get("next") or ""
-    if not id_token:
-        return JSONResponse(
-            {"ok": False, "detail": "인증 토큰이 없습니다."},
-            status_code=400,
-        )
-    try:
-        decoded = verify_firebase_id_token(id_token)
-    except Exception:
-        return JSONResponse(
-            {"ok": False, "detail": "Google 로그인 토큰을 확인할 수 없습니다."},
-            status_code=401,
-        )
+        if not firebase_google_login_ready():
+            return JSONResponse(
+                {"ok": False, "detail": "Firebase 로그인이 서버에 설정되지 않았습니다."},
+                status_code=503,
+            )
+        try:
+            body = await request.json()
+        except Exception:
+            return JSONResponse(
+                {"ok": False, "detail": "잘못된 요청입니다."},
+                status_code=400,
+            )
+        id_token = (body.get("id_token") or "").strip()
+        next_raw = body.get("next") or ""
+        if not id_token:
+            return JSONResponse(
+                {"ok": False, "detail": "인증 토큰이 없습니다."},
+                status_code=400,
+            )
+        try:
+            decoded = verify_firebase_id_token(id_token)
+        except Exception:
+            return JSONResponse(
+                {"ok": False, "detail": "Google 로그인 토큰을 확인할 수 없습니다."},
+                status_code=401,
+            )
 
-    email = (decoded.get("email") or "").strip()
-    uid = (decoded.get("uid") or "").strip()
-    if not email or not uid:
-        return JSONResponse(
-            {"ok": False, "detail": "이메일 정보를 받지 못했습니다."},
-            status_code=400,
-        )
-    if decoded.get("email_verified") is False:
-        return JSONResponse(
-            {"ok": False, "detail": "Google 이메일 인증이 완료된 계정만 사용할 수 있습니다."},
-            status_code=403,
-        )
-    if len(email) > 255:
-        return JSONResponse(
-            {"ok": False, "detail": "이메일 주소가 너무 깁니다."},
-            status_code=400,
-        )
+        email = (decoded.get("email") or "").strip()
+        uid = (decoded.get("uid") or "").strip()
+        if not email or not uid:
+            return JSONResponse(
+                {"ok": False, "detail": "이메일 정보를 받지 못했습니다."},
+                status_code=400,
+            )
+        if decoded.get("email_verified") is False:
+            return JSONResponse(
+                {"ok": False, "detail": "Google 이메일 인증이 완료된 계정만 사용할 수 있습니다."},
+                status_code=403,
+            )
+        if len(email) > 255:
+            return JSONResponse(
+                {"ok": False, "detail": "이메일 주소가 너무 깁니다."},
+                status_code=400,
+            )
 
-    user = db.query(User).filter(User.firebase_uid == uid).first()
-    if user is None:
-        existing = db.query(User).filter(User.username == email).first()
-        if existing is not None:
-            if existing.firebase_uid and existing.firebase_uid != uid:
-                return JSONResponse(
-                    {"ok": False, "detail": "이 이메일은 다른 Google 계정과 연결되어 있습니다."},
-                    status_code=409,
+        user = db.query(User).filter(User.firebase_uid == uid).first()
+        if user is None:
+            existing = db.query(User).filter(User.username == email).first()
+            if existing is not None:
+                if existing.firebase_uid and existing.firebase_uid != uid:
+                    return JSONResponse(
+                        {
+                            "ok": False,
+                            "detail": "이 이메일은 다른 Google 계정과 연결되어 있습니다.",
+                        },
+                        status_code=409,
+                    )
+                existing.firebase_uid = uid
+                user = existing
+                db.commit()
+            else:
+                user = User(
+                    username=email,
+                    nickname=None,
+                    firebase_uid=uid,
+                    password=hash_password(secrets.token_urlsafe(48)),
+                    is_admin=False,
+                    approval_status="pending_approval",
                 )
-            existing.firebase_uid = uid
-            user = existing
-            db.commit()
-        else:
-            user = User(
-                username=email,
-                nickname=None,
-                firebase_uid=uid,
-                password=hash_password(secrets.token_urlsafe(48)),
-                is_admin=False,
-                approval_status="pending_approval",
-            )
-            db.add(user)
-            db.commit()
+                db.add(user)
+                db.commit()
 
-    approval_status = _get_user_approval_status(user)
-    if approval_status != "approved":
-        if approval_status == "pending_approval":
+        approval_status = _get_user_approval_status(user)
+        if approval_status != "approved":
+            if approval_status == "pending_approval":
+                return JSONResponse(
+                    {
+                        "ok": False,
+                        "detail": "관리자 승인 대기 중입니다. 승인 후 Google 로그인을 사용할 수 있습니다.",
+                    },
+                    status_code=403,
+                )
+            if approval_status == "rejected":
+                return JSONResponse(
+                    {
+                        "ok": False,
+                        "detail": "계정이 거절되어 Google 로그인을 사용할 수 없습니다.",
+                    },
+                    status_code=403,
+                )
             return JSONResponse(
-                {
-                    "ok": False,
-                    "detail": "관리자 승인 대기 중입니다. 승인 후 Google 로그인을 사용할 수 있습니다.",
-                },
+                {"ok": False, "detail": "계정 상태를 확인할 수 없습니다."},
                 status_code=403,
             )
-        if approval_status == "rejected":
-            return JSONResponse(
-                {
-                    "ok": False,
-                    "detail": "계정이 거절되어 Google 로그인을 사용할 수 없습니다.",
-                },
-                status_code=403,
-            )
+
+        request.session["user_id"] = user.id
+        dest = _safe_internal_redirect_path(str(next_raw).strip()) or "/"
+        return JSONResponse({"ok": True, "redirect": dest})
+    except Exception:
+        logger.exception("firebase_auth_session failed")
+        try:
+            db.rollback()
+        except Exception:
+            pass
         return JSONResponse(
-            {"ok": False, "detail": "계정 상태를 확인할 수 없습니다."},
-            status_code=403,
+            {
+                "ok": False,
+                "detail": "서버 오류가 발생했습니다. 잠시 후 다시 시도하거나 Render 로그를 확인해 주세요.",
+            },
+            status_code=500,
         )
-
-    request.session["user_id"] = user.id
-    dest = _safe_internal_redirect_path(str(next_raw).strip()) or "/"
-    return JSONResponse({"ok": True, "redirect": dest})
 
 
 @app.get("/profile", response_class=HTMLResponse)
