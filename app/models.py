@@ -30,7 +30,8 @@ class User(Base):
 
     applications = relationship(
         "Application",
-        foreign_keys="Application.user_id",
+        primaryjoin=lambda: User.id == Application.user_id,
+        foreign_keys=lambda: [Application.user_id],
         back_populates="user",
         cascade="all, delete-orphan",
     )
