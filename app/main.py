@@ -704,44 +704,10 @@ def profile_update(
 @app.get("/", response_class=HTMLResponse)
 def index(request: Request, db: Session = Depends(get_db)):
     current_user = get_current_user(request, db)
-
-    events = (
-        db.query(Event)
-        .options(joinedload(Event.slots))
-        .order_by(Event.event_date.asc(), Event.id.asc())
-        .all()
-    )
-
-    event_cards = []
-    for event in events:
-        slot_items = []
-        sorted_slots = sorted(event.slots, key=lambda s: s.start_time)
-
-        for slot in sorted_slots:
-            approved_count = (
-                db.query(Application)
-                .filter(
-                    Application.slot_id == slot.id,
-                    Application.status == "approved",
-                )
-                .count()
-            )
-            remaining = max(0, slot.capacity - approved_count)
-
-            slot_items.append(
-                {
-                    "slot": slot,
-                    "approved": approved_count,
-                    "remaining": remaining,
-                }
-            )
-
-        event_cards.append({"event": event, "slots": slot_items})
-
     return render(
         request,
-        "index.html",
-        {"event_cards": event_cards},
+        "home.html",
+        {},
         db,
         current_user=current_user,
     )
