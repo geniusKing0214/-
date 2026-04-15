@@ -1396,6 +1396,9 @@ button.btn-google:hover {
     border: 1px solid rgba(233, 213, 255, 0.65);
     background: linear-gradient(165deg, rgba(255, 255, 255, 0.98), rgba(250, 245, 255, 0.92));
     box-shadow: 0 12px 40px rgba(124, 58, 237, 0.08);
+    max-width: 100%;
+    overflow-x: clip;
+    box-sizing: border-box;
 }
 
 .sched-hint {
@@ -1457,6 +1460,7 @@ button.btn-google:hover {
     margin-bottom: 16px;
 }
 
+/* 홈 등 다른 화면용 (레거시 슬롯 한 줄) */
 .sched-slot-row {
     display: flex;
     flex-wrap: wrap;
@@ -1774,29 +1778,101 @@ button.btn-google:hover {
     border: 0;
 }
 
+/* 스케줄 생성: 시간 슬롯 — 카드 안에 맞춤, 모바일 대응 */
+.sched-create-page .sched-create-form,
+.sched-create-page .sched-slot-row-wrap {
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+}
+
 .sched-slot-row-wrap .sched-slot-row {
-    display: flex;
-    flex-wrap: nowrap;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
     align-items: center;
-    gap: 10px;
+    gap: 8px 10px;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
     margin-bottom: 10px;
+    padding: 10px 12px;
+    background: rgba(248, 250, 252, 0.95);
+    border-radius: 12px;
+    border: 1px solid rgba(226, 232, 240, 0.95);
 }
 
-.sched-slot-row-wrap .sched-slot-row input[type="time"] {
-    flex: 0 0 auto;
-    min-width: 7rem;
+.sched-slot-row-wrap .sched-slot-cell {
+    min-width: 0;
+    box-sizing: border-box;
 }
 
-.sched-cap-label {
+.sched-slot-row-wrap .sched-slot-time input[type="time"] {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+}
+
+.sched-slot-row-wrap .sched-cap-group {
     display: inline-flex;
     align-items: center;
-    gap: 8px;
-    flex: 0 0 auto;
+    gap: 6px;
+    flex-wrap: nowrap;
+    max-width: 100%;
 }
 
-.sched-cap-text {
+.sched-slot-row-wrap .sched-cap-text {
     font-size: 0.75rem;
     font-weight: 700;
     color: #64748b;
     white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.sched-slot-row-wrap .sched-cap-input {
+    width: 3.25rem;
+    min-width: 2.75rem;
+    max-width: 4rem;
+    padding: 6px 4px;
+    text-align: center;
+    box-sizing: border-box;
+}
+
+.sched-slot-row-wrap .sched-slot-actions {
+    display: flex;
+    justify-content: flex-end;
+    flex-shrink: 0;
+}
+
+.sched-slot-row-wrap .sched-slot-actions .btn {
+    white-space: nowrap;
+}
+
+@media (max-width: 520px) {
+    .sched-slot-row-wrap .sched-slot-row {
+        grid-template-columns: 1fr;
+        gap: 10px;
+        padding: 12px;
+    }
+
+    .sched-slot-row-wrap .sched-slot-capcell {
+        width: 100%;
+    }
+
+    .sched-slot-row-wrap .sched-cap-group {
+        width: 100%;
+        justify-content: space-between;
+        padding: 0 2px;
+    }
+
+    .sched-slot-row-wrap .sched-cap-input {
+        width: auto;
+        min-width: 3.5rem;
+        flex: 0 1 5rem;
+    }
+
+    .sched-slot-row-wrap .sched-slot-actions .btn {
+        width: 100%;
+        justify-content: center;
+    }
 }

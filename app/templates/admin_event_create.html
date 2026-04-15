@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="page-wrap sched-page">
+<div class="page-wrap sched-page sched-create-page">
     <div class="page-header">
         <h1>스케줄 생성 <span class="sched-admin-badge">관리자</span></h1>
         <div class="admin-schedule-header-actions">
@@ -39,10 +39,18 @@
             </div>
             <div id="schedSlotBox" class="sched-slot-box sched-slot-row-wrap">
                 <div class="sched-slot-row">
-                    <input type="time" name="slot_times" required aria-label="시작 시간">
-                    <label class="sched-cap-label"><span class="sched-cap-text">정원</span>
-                    <input type="number" name="slot_capacities" min="1" value="1" class="sched-cap" aria-label="정원" title="정원"></label>
-                    <button type="button" class="btn btn-danger small-btn sched-slot-remove" aria-label="삭제">삭제</button>
+                    <div class="sched-slot-cell sched-slot-time">
+                        <input type="time" name="slot_times" required aria-label="시작 시간">
+                    </div>
+                    <div class="sched-slot-cell sched-slot-capcell">
+                        <label class="sched-cap-group">
+                            <span class="sched-cap-text">정원</span>
+                            <input type="number" name="slot_capacities" min="1" value="1" class="sched-cap-input" aria-label="정원" title="정원">
+                        </label>
+                    </div>
+                    <div class="sched-slot-cell sched-slot-actions">
+                        <button type="button" class="btn btn-danger small-btn sched-slot-remove" aria-label="삭제">삭제</button>
+                    </div>
                 </div>
             </div>
             <button type="submit" class="btn btn-primary full sched-submit">스케줄 등록</button>
@@ -55,10 +63,18 @@
         if (!addBtn || !box) return;
         var rowHtml =
             '<div class="sched-slot-row">' +
+            '<div class="sched-slot-cell sched-slot-time">' +
             '<input type="time" name="slot_times" required aria-label="시작 시간">' +
-            '<label class="sched-cap-label"><span class="sched-cap-text">정원</span>' +
-            '<input type="number" name="slot_capacities" min="1" value="1" class="sched-cap" aria-label="정원" title="정원"></label>' +
+            '</div>' +
+            '<div class="sched-slot-cell sched-slot-capcell">' +
+            '<label class="sched-cap-group">' +
+            '<span class="sched-cap-text">정원</span>' +
+            '<input type="number" name="slot_capacities" min="1" value="1" class="sched-cap-input" aria-label="정원" title="정원">' +
+            '</label>' +
+            '</div>' +
+            '<div class="sched-slot-cell sched-slot-actions">' +
             '<button type="button" class="btn btn-danger small-btn sched-slot-remove" aria-label="삭제">삭제</button>' +
+            '</div>' +
             '</div>';
         addBtn.addEventListener("click", function () {
             box.insertAdjacentHTML("beforeend", rowHtml);
