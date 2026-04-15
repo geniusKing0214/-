@@ -13,8 +13,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY app ./app
 
 ENV PYTHONUNBUFFERED=1
-# 반드시 영구 볼륨이 마운트된 경로 (docker-compose / fly.toml의 /data 와 일치)
+# SQLite: 영구 볼륨(/data). Render에서 PostgreSQL을 쓰면 대시보드의 DATABASE_URL이 이 기본값을 덮어씁니다.
 ENV DATABASE_URL=sqlite:////data/scheduler.db
+RUN mkdir -p /data
 
 # Render 등 클라우드는 PORT 환경 변수로 포트를 지정합니다.
 ENV PORT=8000

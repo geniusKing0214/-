@@ -14,34 +14,87 @@ _project_root = _app_dir.parent
 _default_sqlite = _project_root / "scheduler.db"
 _default_url = f"sqlite:///{_default_sqlite.as_posix()}"
 
-DATABASE_URL = os.environ.get("DATABASE_URL", _default_url)
+def _normalize_database_url(raw: str) -> str:
+    """Render 등이 주는 postgres:// 를 SQLAlchemy가 기대하는 postgresql:// 로 맞춘다."""
+    s = raw.strip()
+    if s.startswith("postgres://"):
+        return "postgresql://" + s[len("postgres://") :]
+    return s
+
+
+_raw_database_url = os.environ.get("DATABASE_URL", _default_url)
+DATABASE_URL = _normalize_database_url(_raw_database_url)
+
+
+def _is_render() -> bool:
+    return os.environ.get("RENDER", "").lower() in ("true", "1", "yes")
 
 
 def _log_sqlite_persistence_hint(url: str) -> None:
-    """재배포 후 데이터가 비는 경우, 대개 DB 파일이 컨테이너 임시 레이어(/app 등)에만 있을 때이다."""
+    """재배포 후 데이터가 비는 경우, 대개 DB 파일이 컨테이너 임시 레이어에만 있을 때이다."""
     if not url.startswith("sqlite:"):
         return
-    in_container = Path("/.dockerenv").exists() or bool(os.environ.get("FLY_APP_NAME"))
+    in_container = (
+        Path("/.dockerenv").exists()
+        or bool(os.environ.get("FLY_APP_NAME"))
+        or _is_render()
+    )
     if not in_container:
         return
-    uses_data_volume = url.startswith("sqlite:////data")
+    uses_data_volume = url.startswith("sqlite:////data") or url.startswith(
+        "sqlite:////app/data"
+    )
     if uses_data_volume:
-        logger.info("SQLite DATABASE_URL이 /data 볼륨 경로를 사용합니다.")
+        logger.info("SQLite DATABASE_URL이 영구 볼륨 경로(/data 또는 /app/data)를 사용합니다.")
     else:
         logger.warning(
-            "SQLite가 /data 볼륨이 아닌 URL을 사용 중입니다. "
-            "배포 시마다 DB가 새로 생기면 스케줄·회원 데이터가 사라질 수 있습니다. "
-            "DATABASE_URL=sqlite:////data/scheduler.db 와 Docker/Fly의 /data 마운트를 확인하세요. "
+            "SQLite가 영구 볼륨 경로가 아닙니다. 배포마다 DB가 새로 생기면 "
+            "회원·스케줄 데이터가 사라집니다. "
+            "Render: PostgreSQL 사용(권장) 또는 Persistent Disk를 /data(또는 /app/data)에 마운트하고 "
+            "DATABASE_URL=sqlite:////data/scheduler.db 와 맞추세요. Fly: fly.toml [mounts] destination. "
             "현재=%r",
             url,
         )
+    if _is_render() and url.startswith("sqlite:") and not uses_data_volume:
+        logger.warning(
+            "Render 환경: 관리형 PostgreSQL을 쓰면(환경 변수 DATABASE_URL) 별도 디스크 없이 데이터가 유지됩니다. "
+            "render.yaml 예시를 저장소 루트에 참고하세요."
+        )
+
 
 _log_sqlite_persistence_hint(DATABASE_URL)
 
-engine = create_engine(
-    DATABASE_URL,
-    connect_args={"check_same_thread": False}
-)
+
+def _ensure_sqlite_parent_dir(url: str) -> None:
+    if not url.startswith("sqlite:"):
+        return
+    try:
+        from sqlalchemy.engine import make_url
+
+        u = make_url(url)
+        if not u.database:
+            return
+        p = Path(u.database)
+        if not p.is_absolute():
+            p = _project_root / p
+        p.parent.mkdir(parents=True, exist_ok=True)
+    except Exception as e:
+        logger.warning("SQLite DB 상위 디렉터리 생성 실패: %s", e)
+
+
+_ensure_sqlite_parent_dir(DATABASE_URL)
+
+
+def _engine_kwargs(url: str) -> dict:
+    if url.startswith("sqlite:"):
+        return {"connect_args": {"check_same_thread": False}}
+    return {"pool_pre_ping": True}
+
+
+engine = create_engine(DATABASE_URL, **_engine_kwargs(DATABASE_URL))
+
+if not DATABASE_URL.startswith("sqlite:"):
+    logger.info("DB 백엔드: PostgreSQL (배포 후에도 데이터 유지)")
 
 SessionLocal = sessionmaker(
     autocommit=False,

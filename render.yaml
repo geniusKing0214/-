@@ -1,0 +1,27 @@
+# Render Blueprint — 영구 DB(PostgreSQL). 배포 후에도 회원·스케줄 데이터가 유지됩니다.
+#
+# 기존 웹 서비스만 쓰는 경우: Render 대시보드에서 PostgreSQL 인스턴스를 추가한 뒤,
+# 웹 서비스 Environment에 DATABASE_URL(내부 연결 문자열)을 넣고, SESSION_SECRET_KEY는
+# 재배포마다 바뀌지 않도록 한 값으로 고정하세요(세션만 풀리고 DB는 유지됩니다).
+#
+# 새로 연결할 때: Blueprint로 이 파일을 적용하거나, 아래 블록을 참고해 수동 생성합니다.
+
+databases:
+  - name: scheduler-db
+    databaseName: scheduler
+    user: scheduler
+
+services:
+  - type: web
+    name: scheduler-web
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: scheduler-db
+          property: connectionString
+      - key: SESSION_SECRET_KEY
+        generateValue: true
+      - key: SESSION_COOKIE_SECURE
+        value: "true"
