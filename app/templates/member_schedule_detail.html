@@ -10,12 +10,28 @@
         <div class="detail-item"><strong>일시</strong><p>{{ schedule.event_datetime.strftime("%Y-%m-%d %H:%M") }}</p></div>
         <div class="detail-item">
             <strong>신청 현황</strong>
-            <p>{{ current_count }}{% if schedule.recruit_limit > 0 %} / {{ schedule.recruit_limit }}{% else %} / 무제한{% endif %}</p>
+            <p>
+                승인 {{ approved_count }}명
+                {% if hold_count > approved_count %}· 검토 대기 {{ hold_count - approved_count }}명{% endif %}
+                {% if schedule.recruit_limit > 0 %} (정원 {{ schedule.recruit_limit }}명){% endif %}
+            </p>
         </div>
         <div class="detail-item">
             <strong>모집 상태</strong>
             <p>{{ "모집중" if schedule.status == "open" else "마감" }}</p>
         </div>
+        {% if my_application %}
+        <div class="detail-item">
+            <strong>내 신청</strong>
+            <p>
+                {% if my_application.status == "pending" %}
+                <span class="badge warning">관리자 승인 대기</span>
+                {% elif my_application.status == "approved" %}
+                <span class="badge success">승인 완료</span>
+                {% endif %}
+            </p>
+        </div>
+        {% endif %}
 
         <div class="detail-actions">
             {% if my_application %}
@@ -25,14 +41,14 @@
             {% else %}
                 {% if schedule.status == "open" %}
                 <form method="post" action="/member/schedules/{{ schedule.id }}/apply">
-                    <button type="submit" class="btn btn-primary">이 이벤트 신청하기</button>
+                    <button type="submit" class="btn btn-primary">신청하기</button>
                 </form>
                 {% else %}
-                <button type="button" class="btn btn-disabled" disabled>마감된 이벤트</button>
+                <button type="button" class="btn btn-disabled" disabled>마감된 일정</button>
                 {% endif %}
             {% endif %}
 
-            <a href="/#member-schedules" class="btn btn-outline">목록으로</a>
+            <a href="/member/schedules/browse" class="btn btn-outline">모집 목록</a>
         </div>
     </div>
 </div>

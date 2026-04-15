@@ -18,6 +18,10 @@ attach_template_globals(templates)
 
 _WEEKDAY_KO = ("월", "화", "수", "목", "금", "토", "일")
 
+# 정원·중복 신청: 대기+승인 모두 점유. 취소 가능: 대기 또는 승인.
+_MEMBER_SCHEDULE_HOLD_STATUSES = ("pending", "approved")
+_MEMBER_SCHEDULE_LIST_STATUSES = ("pending", "approved", "rejected")
+
 
 def _day_label_ko(d: date) -> str:
     return f"{d.year}년 {d.month}월 {d.day}일 ({_WEEKDAY_KO[d.weekday()]})"
@@ -88,10 +92,61 @@ def _member_unread_count(user: User, db: Session) -> int:
 
 @router.get("")
 def member_schedule_list():
-    """목록은 메인 홈으로 통합됨 (#member-schedules)."""
+    """공개 목록은 /browse, 홈 앵커는 승인된 나의 일정."""
     return RedirectResponse(
-        url="/#member-schedules",
+        url="/member/schedules/browse",
         status_code=status.HTTP_303_SEE_OTHER,
+    )
+
+
+def _schedule_hold_counts(db: Session) -> dict[int, int]:
+    rows = (
+        db.query(
+            ScheduleApplication.schedule_id,
+            func.count(ScheduleApplication.id),
+        )
+        .filter(ScheduleApplication.status.in_(_MEMBER_SCHEDULE_HOLD_STATUSES))
+        .group_by(ScheduleApplication.schedule_id)
+        .all()
+    )
+    return {int(sid): int(n) for sid, n in rows}
+
+
+@router.get("/browse")
+def browse_open_member_schedules(
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    now = datetime.now()
+    schedules = (
+        db.query(Schedule)
+        .filter(Schedule.status == "open", Schedule.event_datetime >= now)
+        .order_by(Schedule.event_datetime.asc())
+        .all()
+    )
+    holds = (
+        db.query(ScheduleApplication)
+        .filter(
+            ScheduleApplication.user_id == current_user.id,
+            ScheduleApplication.status.in_(_MEMBER_SCHEDULE_HOLD_STATUSES),
+        )
+        .all()
+    )
+    schedule_hold_status = {a.schedule_id: a.status for a in holds}
+    application_counts = _schedule_hold_counts(db)
+
+    return templates.TemplateResponse(
+        "member_schedule_list.html",
+        {
+            "request": request,
+            "current_user": current_user,
+            "page_title": "모집 중 별도 일정",
+            "unread_count": _member_unread_count(current_user, db),
+            "schedules": schedules,
+            "application_counts": application_counts,
+            "schedule_hold_status": schedule_hold_status,
+        },
     )
 
 
@@ -110,7 +165,7 @@ def my_schedule_applications(
         .join(Schedule, Schedule.id == ScheduleApplication.schedule_id)
         .filter(
             ScheduleApplication.user_id == current_user.id,
-            ScheduleApplication.status == "applied",
+            ScheduleApplication.status.in_(_MEMBER_SCHEDULE_LIST_STATUSES),
         )
         .order_by(Schedule.event_datetime.desc())
         .all()
@@ -139,7 +194,7 @@ def member_schedule_detail(
     schedule_id: int,
     request: Request,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
 ):
     schedule = db.query(Schedule).filter(Schedule.id == schedule_id).first()
     if not schedule:
@@ -150,16 +205,24 @@ def member_schedule_detail(
         .filter(
             ScheduleApplication.schedule_id == schedule_id,
             ScheduleApplication.user_id == current_user.id,
-            ScheduleApplication.status == "applied"
+            ScheduleApplication.status.in_(_MEMBER_SCHEDULE_HOLD_STATUSES),
         )
         .first()
     )
 
-    current_count = (
+    hold_count = (
         db.query(ScheduleApplication)
         .filter(
             ScheduleApplication.schedule_id == schedule_id,
-            ScheduleApplication.status == "applied"
+            ScheduleApplication.status.in_(_MEMBER_SCHEDULE_HOLD_STATUSES),
+        )
+        .count()
+    )
+    approved_count = (
+        db.query(ScheduleApplication)
+        .filter(
+            ScheduleApplication.schedule_id == schedule_id,
+            ScheduleApplication.status == "approved",
         )
         .count()
     )
@@ -169,11 +232,12 @@ def member_schedule_detail(
         {
             "request": request,
             "current_user": current_user,
-            "page_title": "이벤트 상세",
+            "page_title": "별도 모집 상세",
             "unread_count": _member_unread_count(current_user, db),
             "schedule": schedule,
             "my_application": my_application,
-            "current_count": current_count,
+            "hold_count": hold_count,
+            "approved_count": approved_count,
         },
     )
 
@@ -199,7 +263,7 @@ def apply_schedule(
         .filter(
             ScheduleApplication.schedule_id == schedule_id,
             ScheduleApplication.user_id == current_user.id,
-            ScheduleApplication.status == "applied"
+            ScheduleApplication.status.in_(_MEMBER_SCHEDULE_HOLD_STATUSES),
         )
         .first()
     )
@@ -210,7 +274,7 @@ def apply_schedule(
         db.query(ScheduleApplication)
         .filter(
             ScheduleApplication.schedule_id == schedule_id,
-            ScheduleApplication.status == "applied"
+            ScheduleApplication.status.in_(_MEMBER_SCHEDULE_HOLD_STATUSES),
         )
         .count()
     )
@@ -221,7 +285,7 @@ def apply_schedule(
     application = ScheduleApplication(
         user_id=current_user.id,
         schedule_id=schedule_id,
-        status="applied"
+        status="pending",
     )
     db.add(application)
     db.commit()
@@ -243,7 +307,7 @@ def cancel_schedule_application(
         .filter(
             ScheduleApplication.schedule_id == schedule_id,
             ScheduleApplication.user_id == current_user.id,
-            ScheduleApplication.status == "applied"
+            ScheduleApplication.status.in_(_MEMBER_SCHEDULE_HOLD_STATUSES),
         )
         .first()
     )

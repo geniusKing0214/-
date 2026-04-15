@@ -21,6 +21,7 @@ from app.database import (
     SessionLocal,
     engine,
     ensure_events_location_column,
+    ensure_schedule_application_status_migration,
     ensure_sqlite_migrations,
 )
 from app.firebase_init import (
@@ -135,6 +136,7 @@ async def _http_exception_browser_redirect(request: Request, exc: HTTPException)
 Base.metadata.create_all(bind=engine)
 ensure_sqlite_migrations(engine)
 ensure_events_location_column(engine)
+ensure_schedule_application_status_migration(engine)
 
 app.include_router(member_schedule_router)
 
@@ -818,27 +820,25 @@ def index(
 
     has_detail_blocks = any(g["blocks"] for g in detail_groups)
 
-    schedules = (
-        db.query(Schedule).order_by(Schedule.event_datetime.asc()).all()
-    )
-    applied_schedule_ids = {
-        row.schedule_id
-        for row in db.query(ScheduleApplication)
+    approved_member_schedule_ids = [
+        row[0]
+        for row in db.query(ScheduleApplication.schedule_id)
         .filter(
             ScheduleApplication.user_id == current_user.id,
-            ScheduleApplication.status == "applied",
+            ScheduleApplication.status == "approved",
         )
+        .order_by(ScheduleApplication.id.asc())
         .all()
-    }
-    member_schedule_counts = dict(
-        db.query(
-            ScheduleApplication.schedule_id,
-            func.count(ScheduleApplication.id),
+    ]
+    if approved_member_schedule_ids:
+        schedules = (
+            db.query(Schedule)
+            .filter(Schedule.id.in_(approved_member_schedule_ids))
+            .order_by(Schedule.event_datetime.asc())
+            .all()
         )
-        .filter(ScheduleApplication.status == "applied")
-        .group_by(ScheduleApplication.schedule_id)
-        .all()
-    )
+    else:
+        schedules = []
 
     ctx: dict[str, Any] = {
         "page_title": "스케줄",
@@ -854,8 +854,6 @@ def index(
         "sel_day": sel_day,
         "has_month_events": bool(events_in_month),
         "member_schedules": schedules,
-        "member_applied_schedule_ids": applied_schedule_ids,
-        "member_schedule_application_counts": member_schedule_counts,
     }
 
     return render(
@@ -1289,6 +1287,17 @@ def admin_operations(request: Request, db: Session = Depends(get_db)):
     approved_count = sum(1 for item in applications if item.status == "approved")
     rejected_count = sum(1 for item in applications if item.status == "rejected")
 
+    member_schedule_applications_pending = (
+        db.query(ScheduleApplication)
+        .options(
+            joinedload(ScheduleApplication.user),
+            joinedload(ScheduleApplication.schedule),
+        )
+        .filter(ScheduleApplication.status == "pending")
+        .order_by(ScheduleApplication.applied_at.desc())
+        .all()
+    )
+
     (
         db.query(Notification)
         .filter(Notification.user_id == admin.id, Notification.is_read == False)
@@ -1307,6 +1316,7 @@ def admin_operations(request: Request, db: Session = Depends(get_db)):
             "pending_count": pending_count,
             "approved_count": approved_count,
             "rejected_count": rejected_count,
+            "member_schedule_applications_pending": member_schedule_applications_pending,
         },
         db,
         current_user=admin,
@@ -1462,6 +1472,76 @@ def reject_application(
         Notification(
             user_id=application.user_id,
             message=f"'{application.event.title}' {application.slot.start_time.strftime('%H:%M')} 신청이 거절되었습니다.",
+            is_read=False,
+        )
+    )
+    db.commit()
+    return redirect("/admin/operations")
+
+
+@app.post("/admin/member-schedule-applications/{application_id}/approve")
+def approve_member_schedule_application(
+    application_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    try:
+        admin = admin_required(request, db)
+    except PermissionError:
+        return redirect("/login")
+
+    sa = (
+        db.query(ScheduleApplication)
+        .options(
+            joinedload(ScheduleApplication.user),
+            joinedload(ScheduleApplication.schedule),
+        )
+        .filter(ScheduleApplication.id == application_id)
+        .first()
+    )
+    if not sa or sa.status != "pending":
+        return redirect("/admin/operations")
+
+    sa.status = "approved"
+    db.add(
+        Notification(
+            user_id=sa.user_id,
+            message=f"'{sa.schedule.title}' 별도 모집 신청이 승인되었습니다.",
+            is_read=False,
+        )
+    )
+    db.commit()
+    return redirect("/admin/operations")
+
+
+@app.post("/admin/member-schedule-applications/{application_id}/reject")
+def reject_member_schedule_application(
+    application_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    try:
+        admin = admin_required(request, db)
+    except PermissionError:
+        return redirect("/login")
+
+    sa = (
+        db.query(ScheduleApplication)
+        .options(
+            joinedload(ScheduleApplication.user),
+            joinedload(ScheduleApplication.schedule),
+        )
+        .filter(ScheduleApplication.id == application_id)
+        .first()
+    )
+    if not sa or sa.status != "pending":
+        return redirect("/admin/operations")
+
+    sa.status = "rejected"
+    db.add(
+        Notification(
+            user_id=sa.user_id,
+            message=f"'{sa.schedule.title}' 별도 모집 신청이 거절되었습니다.",
             is_read=False,
         )
     )

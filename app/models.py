@@ -131,7 +131,7 @@ class ScheduleApplication(Base):
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     schedule_id = Column(Integer, ForeignKey("schedules.id"), nullable=False)
     applied_at = Column(DateTime, default=datetime.utcnow)
-    status = Column(String(20), default="applied")
+    status = Column(String(20), default="pending")
 
     user = relationship("User", back_populates="schedule_applications")
     schedule = relationship("Schedule", back_populates="applications")

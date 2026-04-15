@@ -1742,6 +1742,22 @@ button.btn-google:hover {
     margin-bottom: 16px;
 }
 
+.sched-member-head-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+}
+
+.sched-member-hint {
+    margin: -8px 0 14px;
+    font-size: 0.85rem;
+}
+
+.sched-member-empty .btn {
+    margin-top: 10px;
+}
+
 .sched-subtle {
     font-size: 0.78rem;
     font-weight: 600;

@@ -67,6 +67,23 @@ def ensure_sqlite_migrations(engine) -> None:
             conn.execute(text("ALTER TABLE users ADD COLUMN firebase_uid VARCHAR(128)"))
 
 
+def ensure_schedule_application_status_migration(engine) -> None:
+    """레거시 applied → approved. 별도 모집은 pending → 관리자 승인 후 approved."""
+    try:
+        insp = inspect(engine)
+        if not insp.has_table("schedule_applications"):
+            return
+    except Exception:
+        return
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                "UPDATE schedule_applications SET status = 'approved' "
+                "WHERE status = 'applied'"
+            )
+        )
+
+
 def ensure_events_location_column(engine) -> None:
     """기존 DB에 events.location 없으면 추가 (SQLite / PostgreSQL 등)."""
     try:

@@ -17,7 +17,7 @@
                     {% if group_mode == 'week' %}aria-current="page"{% endif %}
                 >주별</a>
             </div>
-            <a href="/#member-schedules" class="btn btn-outline btn-sm">이벤트 목록</a>
+            <a href="/member/schedules/browse" class="btn btn-outline btn-sm">모집 중 보기</a>
         </div>
     </div>
 
@@ -33,7 +33,15 @@
                     {{ app.schedule.event_datetime.strftime("%Y-%m-%d %H:%M") }}
                 </span>
                 <span class="app-row-badge">
-                    <span class="badge success">신청</span>
+                    {% if app.status == "pending" %}
+                    <span class="badge warning">승인 대기</span>
+                    {% elif app.status == "approved" %}
+                    <span class="badge success">승인됨</span>
+                    {% elif app.status == "rejected" %}
+                    <span class="badge danger">거절</span>
+                    {% else %}
+                    <span class="badge">{{ app.status }}</span>
+                    {% endif %}
                 </span>
                 <a href="/member/schedules/{{ app.schedule.id }}" class="btn btn-primary btn-sm app-row-action"><span class="btn-label-long">상세보기</span><span class="btn-label-short">보기</span></a>
             </li>

@@ -47,6 +47,37 @@
         {% endif %}
     </section>
 
+    <section class="app-group" aria-labelledby="ops-member-schedules">
+        <h2 class="app-group-title" id="ops-member-schedules">
+            별도 모집 신청 검토
+            {% if member_schedule_applications_pending and member_schedule_applications_pending|length > 0 %}
+            <span class="badge warning">{{ member_schedule_applications_pending|length }}건</span>
+            {% endif %}
+        </h2>
+        {% if member_schedule_applications_pending %}
+        <ul class="app-row-list">
+            {% for sa in member_schedule_applications_pending %}
+            <li class="app-row-compact admin-event-row admin-ops-app-row">
+                <span class="app-row-title" title="{{ sa.schedule.title }}">{{ sa.schedule.title }}</span>
+                <span class="app-row-datetime">{{ sa.schedule.event_datetime.strftime("%Y-%m-%d %H:%M") }}</span>
+                <span class="app-row-stats">{{ display_name(sa.user) }}</span>
+                <span class="app-row-badge"><span class="badge warning">대기</span></span>
+                <span class="admin-event-actions operations-actions">
+                    <form method="post" action="/admin/member-schedule-applications/{{ sa.id }}/approve" class="inline-form">
+                        <button type="submit" class="btn btn-primary btn-sm">승인</button>
+                    </form>
+                    <form method="post" action="/admin/member-schedule-applications/{{ sa.id }}/reject" class="inline-form">
+                        <button type="submit" class="btn btn-outline btn-sm">거절</button>
+                    </form>
+                </span>
+            </li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <div class="empty-box">검토 대기 중인 별도 모집 신청이 없습니다.</div>
+        {% endif %}
+    </section>
+
     <section class="app-group" aria-labelledby="ops-applications">
         <h2 class="app-group-title" id="ops-applications">스케줄 신청 검토</h2>
         {% if applications %}
