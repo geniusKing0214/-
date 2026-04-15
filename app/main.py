@@ -83,6 +83,17 @@ def _login_url_with_next(request: Request) -> str:
     return "/login"
 
 
+def _redirect_login_for_home(request: Request) -> RedirectResponse:
+    """비로그인이 메인(/)에 올 때 — 로그인 후 원래 URL로 돌아가게 next 전달."""
+    next_path = request.url.path
+    if request.url.query:
+        next_path = f"{next_path}?{request.url.query}"
+    safe = _safe_internal_redirect_path(next_path)
+    if safe and not safe.startswith("/login"):
+        return redirect(f"/login?next={quote(safe, safe='')}&error=need_login")
+    return redirect("/login?error=need_login")
+
+
 def _firebase_login_template_ctx(safe_next: Optional[str]) -> dict[str, Any]:
     """웹 SDK용 config는 키만 있으면 넘김. 서버 검증까지 되면 firebase_auth_enabled=True."""
     ctx: dict[str, Any] = {
@@ -520,6 +531,8 @@ def login_page(
         ctx["error"] = "관리자 승인 대기 중입니다. 승인 후 Google 로그인을 사용할 수 있습니다."
     elif err == "google_rejected":
         ctx["error"] = "계정이 거절되어 Google 로그인을 사용할 수 없습니다. 관리자에게 문의해 주세요."
+    elif err == "need_login":
+        ctx["error"] = "로그인 후 메인 화면과 일정을 이용할 수 있습니다."
     return render(request, "login.html", ctx, db)
 
 
@@ -719,6 +732,15 @@ def index(
     db: Session = Depends(get_db),
 ):
     current_user = get_current_user(request, db)
+    if not current_user:
+        return _redirect_login_for_home(request)
+    approval = getattr(current_user, "approval_status", "approved")
+    if approval != "approved":
+        request.session.clear()
+        if approval == "rejected":
+            return redirect("/login?error=google_rejected")
+        return redirect("/login?error=google_pending")
+
     y, m = _parse_home_month(month)
     month_param = f"{y}-{m:02d}"
     py, pm = _shift_calendar_month(y, m, -1)

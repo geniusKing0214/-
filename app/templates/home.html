@@ -4,15 +4,7 @@
 <div class="sched-page">
     <header class="sched-hero">
         <h1 class="sched-title">달력형 신청 스케줄러</h1>
-        {% if current_user %}
         <p class="sched-greeting"><span class="sched-name">{{ display_name(current_user) }}</span>님, 일정을 달력에서 고른 뒤 슬롯을 신청할 수 있어요.</p>
-        {% else %}
-        <p class="sched-greeting">로그인하면 관리자가 올린 일정에 신청할 수 있어요.</p>
-        <div class="sched-guest-btns">
-            <a href="/login?next={{ ('/?month=' ~ month_param) | urlquote }}" class="btn btn-primary btn-sm">로그인</a>
-            <a href="/register" class="btn btn-outline btn-sm">회원가입</a>
-        </div>
-        {% endif %}
     </header>
 
     {% if current_user and current_user.is_admin %}
@@ -159,9 +151,7 @@
                     <span class="sched-slot-t">{{ row.slot.start_time.strftime("%H:%M") }}</span>
                     <span class="sched-slot-c">{{ row.approved }} / {{ row.capacity }}명</span>
                     <span class="sched-slot-act">
-                        {% if row.cta == "login" %}
-                        <a href="/login?next={{ ('/?month=' ~ month_param ~ '&sel=' ~ event.event_date.isoformat() ~ '#event-' ~ event.id) | urlquote }}" class="btn btn-outline btn-sm">로그인 후 신청</a>
-                        {% elif row.cta == "status" %}
+                        {% if row.cta == "status" %}
                         {% if row.status == "pending" %}
                         <span class="badge warning">검토 대기</span>
                         {% else %}
@@ -192,7 +182,7 @@
             {% if has_month_events %}
             이 날짜에 등록된 일정이 없어요. 다른 날을 눌러 보세요.
             {% else %}
-            이번 달에 등록된 일정이 없어요.{% if current_user and current_user.is_admin %} 위에서 스케줄을 등록해 보세요.{% endif %}
+            이번 달에 등록된 일정이 없어요.{% if current_user.is_admin %} 위에서 스케줄을 등록해 보세요.{% endif %}
             {% endif %}
         </div>
         {% endif %}
