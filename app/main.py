@@ -1077,6 +1077,21 @@ def admin_events(
     )
 
 
+@app.get("/admin/events/new", response_class=HTMLResponse)
+def admin_event_create_page(request: Request, db: Session = Depends(get_db)):
+    try:
+        admin = admin_required(request, db)
+    except PermissionError:
+        return redirect("/login")
+    return render(
+        request,
+        "admin_event_create.html",
+        {"page_title": "스케줄 생성"},
+        db,
+        current_user=admin,
+    )
+
+
 @app.get("/admin/events/{event_id}/edit", response_class=HTMLResponse)
 def admin_event_edit(
     request: Request, event_id: int, db: Session = Depends(get_db)

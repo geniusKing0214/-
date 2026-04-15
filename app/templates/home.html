@@ -7,72 +7,6 @@
         <p class="sched-greeting"><span class="sched-name">{{ display_name(current_user) }}</span>님, 일정을 달력에서 고른 뒤 슬롯을 신청할 수 있어요.</p>
     </header>
 
-    {% if current_user and current_user.is_admin %}
-    <section class="sched-admin-card card" aria-labelledby="sched-admin-create">
-        <h2 id="sched-admin-create" class="sched-h2">스케줄 생성 <span class="sched-admin-badge">관리자</span></h2>
-        <p class="sched-hint">날짜·이벤트명·장소·특이사항과 시간 슬롯을 등록하면 회원이 아래 달력에서 신청할 수 있어요.</p>
-        <form method="post" action="/admin/events/create" class="sched-create-form">
-            <div class="sched-form-grid">
-                <div class="sched-field">
-                    <label for="ev_date">날짜</label>
-                    <input type="date" id="ev_date" name="event_date" required>
-                </div>
-                <div class="sched-field sched-field-span2">
-                    <label for="ev_title">이벤트명</label>
-                    <input type="text" id="ev_title" name="title" placeholder="예: 4월 정기 모임" required maxlength="200">
-                </div>
-                <div class="sched-field sched-field-span2">
-                    <label for="ev_location">장소</label>
-                    <input type="text" id="ev_location" name="location" placeholder="예: OO홀 3층" maxlength="300">
-                </div>
-                <div class="sched-field sched-field-full">
-                    <label for="ev_notes">특이사항</label>
-                    <textarea id="ev_notes" name="description" rows="3" placeholder="준비물, 주의사항 등"></textarea>
-                </div>
-            </div>
-
-            <div class="sched-slots-head">
-                <span class="sched-slots-label">시간 슬롯</span>
-                <button type="button" class="btn btn-secondary small-btn" id="schedAddSlot">+ 시간 추가</button>
-            </div>
-            <div id="schedSlotBox" class="sched-slot-box">
-                <div class="sched-slot-row">
-                    <input type="time" name="slot_times" required aria-label="시작 시간">
-                    <input type="number" name="slot_capacities" min="1" value="1" class="sched-cap" aria-label="정원" title="정원">
-                    <button type="button" class="btn btn-danger small-btn sched-slot-remove" aria-label="삭제">삭제</button>
-                </div>
-            </div>
-            <button type="submit" class="btn btn-primary full sched-submit">스케줄 등록</button>
-        </form>
-    </section>
-    <script>
-    (function () {
-        var addBtn = document.getElementById("schedAddSlot");
-        var box = document.getElementById("schedSlotBox");
-        if (!addBtn || !box) return;
-        addBtn.addEventListener("click", function () {
-            var row = document.createElement("div");
-            row.className = "sched-slot-row";
-            row.innerHTML =
-                '<input type="time" name="slot_times" required aria-label="시작 시간">' +
-                '<input type="number" name="slot_capacities" min="1" value="1" class="sched-cap" aria-label="정원" title="정원">' +
-                '<button type="button" class="btn btn-danger small-btn sched-slot-remove" aria-label="삭제">삭제</button>';
-            box.appendChild(row);
-        });
-        box.addEventListener("click", function (e) {
-            var t = e.target;
-            if (!t || !t.classList || !t.classList.contains("sched-slot-remove")) return;
-            var rows = box.querySelectorAll(".sched-slot-row");
-            if (rows.length <= 1) {
-                alert("최소 1개의 시간 슬롯이 필요합니다.");
-                return;
-            }
-            t.closest(".sched-slot-row").remove();
-        });
-    })();
-    </script>
-    {% endif %}
-
     <section class="sched-calendar-section" aria-labelledby="sched-cal-heading">
         <div class="sched-cal-toolbar">
             <h2 id="sched-cal-heading" class="sched-h2 sched-h2-inline">일정 달력</h2>
@@ -182,7 +116,7 @@
             {% if has_month_events %}
             이 날짜에 등록된 일정이 없어요. 다른 날을 눌러 보세요.
             {% else %}
-            이번 달에 등록된 일정이 없어요.{% if current_user.is_admin %} 위에서 스케줄을 등록해 보세요.{% endif %}
+            이번 달에 등록된 일정이 없어요.{% if current_user.is_admin %} 메뉴의 <strong>스케줄 생성</strong>에서 일정을 등록해 보세요.{% endif %}
             {% endif %}
         </div>
         {% endif %}
