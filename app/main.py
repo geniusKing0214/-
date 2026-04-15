@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import calendar as calendar_mod
 import logging
 import os
 import secrets
@@ -329,6 +330,101 @@ def _event_time_label(event: Event) -> str:
     return f"{event.event_date.strftime('%Y-%m-%d')} {t.strftime('%H:%M')}"
 
 
+def _parse_home_month(raw: Optional[str]) -> tuple[int, int]:
+    t = date.today()
+    if not raw or not str(raw).strip():
+        return t.year, t.month
+    s = str(raw).strip()
+    try:
+        if len(s) >= 7 and s[4] == "-":
+            y = int(s[:4])
+            m = int(s[5:7])
+            if 1 <= m <= 12 and 2000 <= y <= 2100:
+                return y, m
+    except ValueError:
+        pass
+    return t.year, t.month
+
+
+def _shift_calendar_month(year: int, month: int, delta: int) -> tuple[int, int]:
+    m = month + delta
+    y = year
+    while m > 12:
+        m -= 12
+        y += 1
+    while m < 1:
+        m += 12
+        y -= 1
+    return y, m
+
+
+def _parse_sel_day(raw: Optional[str]) -> Optional[date]:
+    if not raw or not str(raw).strip():
+        return None
+    try:
+        return datetime.strptime(str(raw).strip()[:10], "%Y-%m-%d").date()
+    except ValueError:
+        return None
+
+
+def _home_slots_ui(db: Session, user: Optional[User], event: Event) -> list[dict[str, Any]]:
+    """홈 화면 슬롯별 신청 버튼/상태."""
+    slots = sorted(
+        [s for s in event.slots if s.is_active],
+        key=lambda s: s.start_time,
+    )
+    if not slots:
+        return []
+    slot_ids = [s.id for s in slots]
+    approved_rows = (
+        db.query(Application.slot_id, func.count(Application.id))
+        .filter(
+            Application.slot_id.in_(slot_ids),
+            Application.status == "approved",
+        )
+        .group_by(Application.slot_id)
+        .all()
+    )
+    approved_by_slot = {int(sid): int(n) for sid, n in approved_rows}
+
+    my_by_slot: dict[int, Application] = {}
+    if user:
+        for app in (
+            db.query(Application)
+            .filter(
+                Application.user_id == user.id,
+                Application.slot_id.in_(slot_ids),
+            )
+            .order_by(Application.id.desc())
+            .all()
+        ):
+            if app.slot_id not in my_by_slot:
+                my_by_slot[app.slot_id] = app
+
+    out: list[dict[str, Any]] = []
+    for slot in slots:
+        approved = approved_by_slot.get(slot.id, 0)
+        full = approved >= slot.capacity
+        my = my_by_slot.get(slot.id)
+        row: dict[str, Any] = {
+            "slot": slot,
+            "approved": approved,
+            "capacity": slot.capacity,
+            "full": full,
+        }
+        if not user:
+            row["cta"] = "login"
+        elif my and my.status in ("pending", "approved"):
+            row["cta"] = "status"
+            row["status"] = my.status
+        elif full:
+            row["cta"] = "full"
+        else:
+            row["cta"] = "apply"
+        out.append(row)
+    return out
+
+
 def _group_events_by_day(events: list[Event]) -> list[dict[str, Any]]:
     events_sorted = sorted(events, key=_event_sort_dt)
     order: list[date] = []
@@ -639,6 +735,8 @@ def profile_update(
 @app.get("/", response_class=HTMLResponse)
 def index(
     request: Request,
+    month: Optional[str] = Query(None),
+    sel: Optional[str] = Query(None),
     db: Session = Depends(get_db),
 ):
     current_user = get_current_user(request, db)
@@ -650,6 +748,75 @@ def index(
         if approval == "rejected":
             return redirect("/login?error=google_rejected")
         return redirect("/login?error=google_pending")
+
+    y, m = _parse_home_month(month)
+    month_param = f"{y}-{m:02d}"
+    py, pm = _shift_calendar_month(y, m, -1)
+    ny, nm = _shift_calendar_month(y, m, 1)
+    first = date(y, m, 1)
+    last = date(y, m, calendar_mod.monthrange(y, m)[1])
+
+    events_in_month = (
+        db.query(Event)
+        .options(joinedload(Event.slots))
+        .filter(Event.event_date >= first, Event.event_date <= last)
+        .order_by(Event.event_date.asc(), Event.id.asc())
+        .all()
+    )
+    for e in events_in_month:
+        e.slots = [s for s in e.slots if s.is_active]
+
+    by_date: dict[date, list[Event]] = {}
+    for e in events_in_month:
+        by_date.setdefault(e.event_date, []).append(e)
+
+    cal = calendar_mod.Calendar(firstweekday=0)
+    cal_weeks: list[list[dict[str, Any]]] = []
+    for week in cal.monthdatescalendar(y, m):
+        row: list[dict[str, Any]] = []
+        for d in week:
+            n = len(by_date.get(d, []))
+            row.append(
+                {
+                    "date": d,
+                    "in_month": d.month == m,
+                    "is_today": d == date.today(),
+                    "event_count": n,
+                }
+            )
+        cal_weeks.append(row)
+
+    sel_day = _parse_sel_day(sel)
+    if sel_day and (sel_day.year, sel_day.month) != (y, m):
+        sel_day = None
+
+    def _blocks(evts: list[Event]) -> list[dict[str, Any]]:
+        return [
+            {
+                "event": e,
+                "slots_ui": _home_slots_ui(db, current_user, e),
+                "time_label": _event_time_label(e),
+            }
+            for e in evts
+        ]
+
+    if sel_day:
+        detail_groups = [
+            {
+                "label": _day_label_ko(sel_day),
+                "blocks": _blocks(by_date.get(sel_day, [])),
+            }
+        ]
+    else:
+        detail_groups = [
+            {
+                "label": _day_label_ko(d),
+                "blocks": _blocks(by_date[d]),
+            }
+            for d in sorted(by_date.keys())
+        ]
+
+    has_detail_blocks = any(g["blocks"] for g in detail_groups)
 
     schedules = (
         db.query(Schedule).order_by(Schedule.event_datetime.asc()).all()
@@ -675,6 +842,17 @@ def index(
 
     ctx: dict[str, Any] = {
         "page_title": "스케줄",
+        "cal_year": y,
+        "cal_month": m,
+        "month_param": month_param,
+        "prev_month_param": f"{py}-{pm:02d}",
+        "next_month_param": f"{ny}-{nm:02d}",
+        "cal_weeks": cal_weeks,
+        "weekday_headers": ("월", "화", "수", "목", "금", "토", "일"),
+        "detail_groups": detail_groups,
+        "has_detail_blocks": has_detail_blocks,
+        "sel_day": sel_day,
+        "has_month_events": bool(events_in_month),
         "member_schedules": schedules,
         "member_applied_schedule_ids": applied_schedule_ids,
         "member_schedule_application_counts": member_schedule_counts,
@@ -1056,7 +1234,7 @@ def create_event(
         )
 
     db.commit()
-    return redirect("/")
+    return redirect(f"/?month={ev_date.year}-{ev_date.month:02d}&sel={ev_date.isoformat()}")
 
 
 @app.post("/admin/events/{event_id}/delete")
