@@ -969,19 +969,19 @@ def my_applications(
     if group not in ("day", "week"):
         group = "day"
 
+    # join + joinedload(Application.event) 동시 사용 시 SQLAlchemy가 경로를 꼬아 500이 날 수 있음(특히 Postgres).
     applications = (
         db.query(Application)
-        .join(Event, Application.event_id == Event.id)
-        .join(EventSlot, Application.slot_id == EventSlot.id)
         .options(joinedload(Application.event), joinedload(Application.slot))
         .filter(Application.user_id == user.id)
-        .order_by(
-            Event.event_date.desc(),
-            EventSlot.start_time.desc(),
-            Application.id.desc(),
-        )
         .all()
     )
+    applications = [
+        a
+        for a in applications
+        if a.event is not None and a.slot is not None
+    ]
+    applications.sort(key=_application_event_dt, reverse=True)
 
     if group == "week":
         application_groups = _group_applications_by_week(applications)
