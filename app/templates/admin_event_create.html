@@ -37,18 +37,16 @@
                 <span class="sched-slots-label">시간 슬롯</span>
                 <button type="button" class="btn btn-secondary small-btn" id="schedAddSlot">+ 시간 추가</button>
             </div>
-            <div id="schedSlotBox" class="sched-slot-box sched-slot-row-wrap">
-                <div class="sched-slot-row">
-                    <div class="sched-slot-cell sched-slot-time">
+            <div id="schedSlotBox" class="sched-slot-box sched-slot-ui">
+                <div class="sched-slot-block">
+                    <div class="sched-slot-time">
                         <input type="time" name="slot_times" required aria-label="시작 시간">
                     </div>
-                    <div class="sched-slot-cell sched-slot-capcell">
+                    <div class="sched-slot-meta">
                         <label class="sched-cap-group">
                             <span class="sched-cap-text">정원</span>
                             <input type="number" name="slot_capacities" min="1" value="1" class="sched-cap-input" aria-label="정원" title="정원">
                         </label>
-                    </div>
-                    <div class="sched-slot-cell sched-slot-actions">
                         <button type="button" class="btn btn-danger small-btn sched-slot-remove" aria-label="삭제">삭제</button>
                     </div>
                 </div>
@@ -62,17 +60,15 @@
         var box = document.getElementById("schedSlotBox");
         if (!addBtn || !box) return;
         var rowHtml =
-            '<div class="sched-slot-row">' +
-            '<div class="sched-slot-cell sched-slot-time">' +
+            '<div class="sched-slot-block">' +
+            '<div class="sched-slot-time">' +
             '<input type="time" name="slot_times" required aria-label="시작 시간">' +
             '</div>' +
-            '<div class="sched-slot-cell sched-slot-capcell">' +
+            '<div class="sched-slot-meta">' +
             '<label class="sched-cap-group">' +
             '<span class="sched-cap-text">정원</span>' +
             '<input type="number" name="slot_capacities" min="1" value="1" class="sched-cap-input" aria-label="정원" title="정원">' +
             '</label>' +
-            '</div>' +
-            '<div class="sched-slot-cell sched-slot-actions">' +
             '<button type="button" class="btn btn-danger small-btn sched-slot-remove" aria-label="삭제">삭제</button>' +
             '</div>' +
             '</div>';
@@ -82,12 +78,12 @@
         box.addEventListener("click", function (e) {
             var t = e.target;
             if (!t || !t.classList || !t.classList.contains("sched-slot-remove")) return;
-            var rows = box.querySelectorAll(".sched-slot-row");
+            var rows = box.querySelectorAll(".sched-slot-block");
             if (rows.length <= 1) {
                 alert("최소 1개의 시간 슬롯이 필요합니다.");
                 return;
             }
-            t.closest(".sched-slot-row").remove();
+            t.closest(".sched-slot-block").remove();
         });
     })();
     </script>
