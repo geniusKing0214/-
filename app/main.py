@@ -28,7 +28,15 @@ from app.firebase_init import (
     get_firebase_web_config,
     verify_firebase_id_token,
 )
-from app.models import User, Event, EventSlot, Application, Notification
+from app.models import (
+    User,
+    Event,
+    EventSlot,
+    Application,
+    Notification,
+    Schedule,
+    ScheduleApplication,
+)
 from app.password_utils import hash_password, verify_password
 from app.routes.member_schedule import router as member_schedule_router
 from app.template_globals import attach_template_globals, display_name as user_display_name
@@ -810,6 +818,28 @@ def index(
 
     has_detail_blocks = any(g["blocks"] for g in detail_groups)
 
+    schedules = (
+        db.query(Schedule).order_by(Schedule.event_datetime.asc()).all()
+    )
+    applied_schedule_ids = {
+        row.schedule_id
+        for row in db.query(ScheduleApplication)
+        .filter(
+            ScheduleApplication.user_id == current_user.id,
+            ScheduleApplication.status == "applied",
+        )
+        .all()
+    }
+    member_schedule_counts = dict(
+        db.query(
+            ScheduleApplication.schedule_id,
+            func.count(ScheduleApplication.id),
+        )
+        .filter(ScheduleApplication.status == "applied")
+        .group_by(ScheduleApplication.schedule_id)
+        .all()
+    )
+
     ctx: dict[str, Any] = {
         "page_title": "스케줄",
         "cal_year": y,
@@ -823,6 +853,9 @@ def index(
         "has_detail_blocks": has_detail_blocks,
         "sel_day": sel_day,
         "has_month_events": bool(events_in_month),
+        "member_schedules": schedules,
+        "member_applied_schedule_ids": applied_schedule_ids,
+        "member_schedule_application_counts": member_schedule_counts,
     }
 
     return render(

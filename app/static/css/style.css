@@ -1721,3 +1721,43 @@ button.btn-google:hover {
     border-radius: 16px;
     background: rgba(255, 255, 255, 0.5);
 }
+
+/* 메인 홈: 별도 모집(Schedule) 목록 */
+.sched-member-hub {
+    margin-top: 32px;
+    padding-top: 26px;
+    border-top: 1px dashed rgba(203, 213, 225, 0.85);
+}
+
+.sched-member-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 16px;
+}
+
+.sched-subtle {
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--cute-muted);
+    margin-left: 6px;
+}
+
+.sched-member-card-title {
+    margin: 0 0 8px;
+    font-size: 1.05rem;
+    font-weight: 800;
+    color: var(--cute-text);
+}
+
+.sched-page .compact-calendar .card-list {
+    gap: 12px;
+}
+
+.sched-page .compact-calendar .card {
+    border-radius: 16px;
+    border: 1px solid rgba(233, 213, 255, 0.5);
+    box-shadow: var(--cute-shadow-sm);
+}

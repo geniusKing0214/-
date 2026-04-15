@@ -87,48 +87,11 @@ def _member_unread_count(user: User, db: Session) -> int:
 
 
 @router.get("")
-def member_schedule_list(
-    request: Request,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    schedules = (
-        db.query(Schedule)
-        .order_by(Schedule.event_datetime.asc())
-        .all()
-    )
-
-    applied_schedule_ids = {
-        row.schedule_id
-        for row in db.query(ScheduleApplication)
-        .filter(
-            ScheduleApplication.user_id == current_user.id,
-            ScheduleApplication.status == "applied"
-        )
-        .all()
-    }
-
-    application_counts = dict(
-        db.query(
-            ScheduleApplication.schedule_id,
-            func.count(ScheduleApplication.id)
-        )
-        .filter(ScheduleApplication.status == "applied")
-        .group_by(ScheduleApplication.schedule_id)
-        .all()
-    )
-
-    return templates.TemplateResponse(
-        "member_schedule_list.html",
-        {
-            "request": request,
-            "current_user": current_user,
-            "page_title": "이벤트",
-            "unread_count": _member_unread_count(current_user, db),
-            "schedules": schedules,
-            "applied_schedule_ids": applied_schedule_ids,
-            "application_counts": application_counts,
-        },
+def member_schedule_list():
+    """목록은 메인 홈으로 통합됨 (#member-schedules)."""
+    return RedirectResponse(
+        url="/#member-schedules",
+        status_code=status.HTTP_303_SEE_OTHER,
     )
 
 

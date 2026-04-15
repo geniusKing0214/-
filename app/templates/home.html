@@ -187,5 +187,38 @@
         </div>
         {% endif %}
     </section>
+
+    <section id="member-schedules" class="sched-member-hub compact-calendar" aria-labelledby="member-sched-hub-h">
+        <div class="sched-member-head">
+            <h2 id="member-sched-hub-h" class="sched-h2">이벤트 스케줄 <span class="sched-subtle">별도 모집</span></h2>
+            <a href="/member/schedules/my/list" class="btn btn-outline btn-sm">내 신청 내역</a>
+        </div>
+        <div class="card-list sched-member-cards">
+            {% for schedule in member_schedules %}
+            {% set current_count = member_schedule_application_counts.get(schedule.id, 0) %}
+            <div class="card">
+                <div class="card-body">
+                    <h3 class="sched-member-card-title">{{ schedule.title }}</h3>
+                    <p class="text-muted">{{ schedule.description or "설명 없음" }}</p>
+                    <div class="info-row"><strong>장소:</strong> {{ schedule.location or "-" }}</div>
+                    <div class="info-row"><strong>일시:</strong> {{ schedule.event_datetime.strftime("%Y-%m-%d %H:%M") }}</div>
+                    <div class="info-row">
+                        <strong>신청 인원:</strong>
+                        {{ current_count }}{% if schedule.recruit_limit > 0 %} / {{ schedule.recruit_limit }}{% else %} / 무제한{% endif %}
+                    </div>
+                    <div class="info-row"><strong>상태:</strong> {{ "모집중" if schedule.status == "open" else "마감" }}</div>
+                    <div class="card-actions">
+                        <a href="/member/schedules/{{ schedule.id }}" class="btn btn-primary">상세보기</a>
+                        {% if schedule.id in member_applied_schedule_ids %}
+                        <span class="badge success">신청완료</span>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            {% else %}
+            <div class="empty-box">등록된 별도 모집 일정이 없습니다.</div>
+            {% endfor %}
+        </div>
+    </section>
 </div>
 {% endblock %}
