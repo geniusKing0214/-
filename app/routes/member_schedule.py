@@ -4,7 +4,6 @@ from typing import Any
 from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request, status
 from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
-from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -92,61 +91,25 @@ def _member_unread_count(user: User, db: Session) -> int:
 
 @router.get("")
 def member_schedule_list():
-    """공개 목록은 /browse, 홈 앵커는 승인된 나의 일정."""
+    """루트 /member/schedules 는 홈의 별도 모집 신청 구역으로 보냅니다."""
+    today = date.today()
+    month_param = f"{today.year}-{today.month:02d}"
     return RedirectResponse(
-        url="/member/schedules/browse",
+        url=f"/?month={month_param}#home-extra-schedules",
         status_code=status.HTTP_303_SEE_OTHER,
     )
 
 
-def _schedule_hold_counts(db: Session) -> dict[int, int]:
-    rows = (
-        db.query(
-            ScheduleApplication.schedule_id,
-            func.count(ScheduleApplication.id),
-        )
-        .filter(ScheduleApplication.status.in_(_MEMBER_SCHEDULE_HOLD_STATUSES))
-        .group_by(ScheduleApplication.schedule_id)
-        .all()
-    )
-    return {int(sid): int(n) for sid, n in rows}
-
-
 @router.get("/browse")
 def browse_open_member_schedules(
-    request: Request,
-    db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    now = datetime.now()
-    schedules = (
-        db.query(Schedule)
-        .filter(Schedule.status == "open", Schedule.event_datetime >= now)
-        .order_by(Schedule.event_datetime.asc())
-        .all()
-    )
-    holds = (
-        db.query(ScheduleApplication)
-        .filter(
-            ScheduleApplication.user_id == current_user.id,
-            ScheduleApplication.status.in_(_MEMBER_SCHEDULE_HOLD_STATUSES),
-        )
-        .all()
-    )
-    schedule_hold_status = {a.schedule_id: a.status for a in holds}
-    application_counts = _schedule_hold_counts(db)
-
-    return templates.TemplateResponse(
-        "member_schedule_list.html",
-        {
-            "request": request,
-            "current_user": current_user,
-            "page_title": "모집 중 별도 일정",
-            "unread_count": _member_unread_count(current_user, db),
-            "schedules": schedules,
-            "application_counts": application_counts,
-            "schedule_hold_status": schedule_hold_status,
-        },
+    """별도 모집 목록·신청은 홈 화면으로 통합됨."""
+    today = date.today()
+    month_param = f"{today.year}-{today.month:02d}"
+    return RedirectResponse(
+        url=f"/?month={month_param}#home-extra-schedules",
+        status_code=status.HTTP_303_SEE_OTHER,
     )
 
 
@@ -290,9 +253,11 @@ def apply_schedule(
     db.add(application)
     db.commit()
 
+    dt = schedule.event_datetime
+    month_param = f"{dt.year}-{dt.month:02d}"
     return RedirectResponse(
-        url=f"/member/schedules/{schedule_id}",
-        status_code=status.HTTP_303_SEE_OTHER
+        url=f"/?month={month_param}#home-extra-schedules",
+        status_code=status.HTTP_303_SEE_OTHER,
     )
 
 
@@ -315,10 +280,14 @@ def cancel_schedule_application(
     if not application:
         raise HTTPException(status_code=404, detail="신청 내역이 없습니다.")
 
+    schedule_row = db.query(Schedule).filter(Schedule.id == schedule_id).first()
     application.status = "cancelled"
     db.commit()
 
-    return RedirectResponse(
-        url=f"/member/schedules/{schedule_id}",
-        status_code=status.HTTP_303_SEE_OTHER
-    )
+    if schedule_row:
+        dt = schedule_row.event_datetime
+        month_param = f"{dt.year}-{dt.month:02d}"
+        loc = f"/?month={month_param}#home-extra-schedules"
+    else:
+        loc = "/#home-extra-schedules"
+    return RedirectResponse(url=loc, status_code=status.HTTP_303_SEE_OTHER)

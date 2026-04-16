@@ -4,7 +4,7 @@
 <div class="sched-page">
     <header class="sched-hero">
         <h1 class="sched-title">달력형 신청 스케줄러</h1>
-        <p class="sched-greeting"><span class="sched-name">{{ display_name(current_user) }}</span>님, 일정을 달력에서 고른 뒤 슬롯을 신청할 수 있어요.</p>
+        <p class="sched-greeting">일정을 달력에서 고른 뒤 슬롯을 신청할 수 있어요.</p>
     </header>
 
     <section class="sched-calendar-section" aria-labelledby="sched-cal-heading">
@@ -32,8 +32,8 @@
                     class="sched-cal-cell {% if cell.is_today %}is-today{% endif %} {% if sel_day and cell.date == sel_day %}is-selected{% endif %}"
                 >
                     <span class="sched-cal-num">{{ cell.date.day }}</span>
-                    {% if cell.event_count > 0 %}
-                    {% set dot_n = [cell.event_count, 3] | min %}
+                    {% if cell.calendar_marker_count > 0 %}
+                    {% set dot_n = cell.calendar_marker_count %}
                     <span class="sched-cal-dots" aria-hidden="true">
                         {% for _ in range(dot_n) %}
                         <span class="sched-dot"></span>
@@ -66,6 +66,22 @@
         {% if g.blocks %}
         <h3 class="sched-day-label">{{ g.label }}</h3>
         {% for block in g.blocks %}
+        {% if block.kind == "member_schedule" %}
+        {% set s = block.schedule %}
+        <article class="sched-event-card card sched-extra-approved-card" id="extra-schedule-{{ s.id }}">
+            <div class="sched-event-top">
+                <h4 class="sched-event-title">{{ s.title }} <span class="badge success sched-extra-badge">별도 모집·승인</span></h4>
+                <time class="sched-event-time" datetime="{{ s.event_datetime.date().isoformat() }}">{{ block.time_label }}</time>
+            </div>
+            {% if s.location %}
+            <p class="sched-meta"><span class="sched-meta-k">장소</span> {{ s.location }}</p>
+            {% endif %}
+            {% if s.description %}
+            <p class="sched-notes">{{ s.description }}</p>
+            {% endif %}
+            <p class="sched-empty-inline"><a href="/member/schedules/{{ s.id }}" class="btn btn-outline btn-sm">상세·취소</a></p>
+        </article>
+        {% else %}
         {% set event = block.event %}
         <article class="sched-event-card card" id="event-{{ event.id }}">
             <div class="sched-event-top">
@@ -108,6 +124,7 @@
             <p class="sched-empty-inline">열린 슬롯이 없습니다.</p>
             {% endif %}
         </article>
+        {% endif %}
         {% endfor %}
         {% endif %}
         {% endfor %}
@@ -122,17 +139,17 @@
         {% endif %}
     </section>
 
-    <section id="member-schedules" class="sched-member-hub compact-calendar" aria-labelledby="member-sched-hub-h">
+    <section id="home-extra-schedules" class="sched-extra-apply-section compact-calendar" aria-labelledby="home-extra-h">
         <div class="sched-member-head">
-            <h2 id="member-sched-hub-h" class="sched-h2">내 별도 모집 일정</h2>
+            <h2 id="home-extra-h" class="sched-h2">별도 모집 신청</h2>
             <div class="sched-member-head-actions">
-                <a href="/member/schedules/browse" class="btn btn-outline btn-sm">모집 중 보기</a>
-                <a href="/member/schedules/my/list" class="btn btn-outline btn-sm">내 신청 내역</a>
+                <a href="/member/schedules/my/list" class="btn btn-outline btn-sm">내 신청·승인 일정</a>
             </div>
         </div>
-        <p class="form-hint sched-member-hint">내가 신청해 <strong>승인된</strong> 일정만 표시됩니다. 새로 신청하려면 모집 중 보기로 이동하세요.</p>
+        <p class="form-hint sched-member-hint">별도 모집은 <strong>이 화면에서만</strong> 신청할 수 있습니다. 달력에는 내가 신청해 <strong>승인된</strong> 별도 일정만 표시됩니다.</p>
         <div class="card-list sched-member-cards">
-            {% for schedule in member_schedules %}
+            {% for schedule in open_extra_schedules %}
+            {% set current_count = extra_application_counts.get(schedule.id, 0) %}
             <div class="card">
                 <div class="card-body">
                     <h3 class="sched-member-card-title">{{ schedule.title }}</h3>
@@ -141,15 +158,30 @@
                     {% endif %}
                     <div class="info-row"><strong>장소:</strong> {{ schedule.location or "-" }}</div>
                     <div class="info-row"><strong>일시:</strong> {{ schedule.event_datetime.strftime("%Y-%m-%d %H:%M") }}</div>
+                    <div class="info-row">
+                        <strong>신청 인원:</strong>
+                        {{ current_count }}{% if schedule.recruit_limit > 0 %} / {{ schedule.recruit_limit }}{% else %} / 무제한{% endif %}
+                    </div>
                     <div class="card-actions">
-                        <a href="/member/schedules/{{ schedule.id }}" class="btn btn-primary">상세보기</a>
+                        {% set st = extra_schedule_hold_status.get(schedule.id) %}
+                        {% if st == "pending" %}
+                        <span class="badge warning">승인 대기</span>
+                        <a href="/member/schedules/{{ schedule.id }}" class="btn btn-outline btn-sm">상세</a>
+                        {% elif st == "approved" %}
+                        <span class="badge success">승인됨</span>
+                        <a href="/member/schedules/{{ schedule.id }}" class="btn btn-outline btn-sm">상세</a>
+                        {% else %}
+                        <form method="post" action="/member/schedules/{{ schedule.id }}/apply" class="inline-form">
+                            <button type="submit" class="btn btn-primary">신청하기</button>
+                        </form>
+                        <a href="/member/schedules/{{ schedule.id }}" class="btn btn-outline btn-sm">상세보기</a>
+                        {% endif %}
                     </div>
                 </div>
             </div>
             {% else %}
             <div class="empty-box sched-member-empty">
-                승인된 별도 모집 일정이 없습니다.
-                <div><a href="/member/schedules/browse" class="btn btn-outline btn-sm">모집 중인 일정 보기</a></div>
+                모집 중인 별도 일정이 없습니다.
             </div>
             {% endfor %}
         </div>

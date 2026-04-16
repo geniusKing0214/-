@@ -772,18 +772,37 @@ def index(
     for e in events_in_month:
         by_date.setdefault(e.event_date, []).append(e)
 
+    approved_member_schedules = (
+        db.query(Schedule)
+        .join(ScheduleApplication, ScheduleApplication.schedule_id == Schedule.id)
+        .filter(
+            ScheduleApplication.user_id == current_user.id,
+            ScheduleApplication.status == "approved",
+        )
+        .order_by(Schedule.event_datetime.asc())
+        .all()
+    )
+    member_schedules_by_date: dict[date, list[Schedule]] = {}
+    for s in approved_member_schedules:
+        sd = s.event_datetime.date()
+        if first <= sd <= last:
+            member_schedules_by_date.setdefault(sd, []).append(s)
+
     cal = calendar_mod.Calendar(firstweekday=0)
     cal_weeks: list[list[dict[str, Any]]] = []
     for week in cal.monthdatescalendar(y, m):
         row: list[dict[str, Any]] = []
         for d in week:
-            n = len(by_date.get(d, []))
+            n_ev = len(by_date.get(d, []))
+            n_ms = len(member_schedules_by_date.get(d, []))
             row.append(
                 {
                     "date": d,
                     "in_month": d.month == m,
                     "is_today": d == date.today(),
-                    "event_count": n,
+                    "event_count": n_ev,
+                    "member_approved_schedule_count": n_ms,
+                    "calendar_marker_count": min(n_ev + n_ms, 3),
                 }
             )
         cal_weeks.append(row)
@@ -795,6 +814,7 @@ def index(
     def _blocks(evts: list[Event]) -> list[dict[str, Any]]:
         return [
             {
+                "kind": "event",
                 "event": e,
                 "slots_ui": _home_slots_ui(db, current_user, e),
                 "time_label": _event_time_label(e),
@@ -802,43 +822,65 @@ def index(
             for e in evts
         ]
 
+    def _merged_day_blocks(day: date) -> list[dict[str, Any]]:
+        out = _blocks(by_date.get(day, []))
+        for s in member_schedules_by_date.get(day, []):
+            out.append(
+                {
+                    "kind": "member_schedule",
+                    "schedule": s,
+                    "time_label": s.event_datetime.strftime("%Y-%m-%d %H:%M"),
+                }
+            )
+        return out
+
+    all_detail_days = sorted(set(by_date.keys()) | set(member_schedules_by_date.keys()))
     if sel_day:
         detail_groups = [
             {
                 "label": _day_label_ko(sel_day),
-                "blocks": _blocks(by_date.get(sel_day, [])),
+                "blocks": _merged_day_blocks(sel_day),
             }
         ]
     else:
         detail_groups = [
             {
                 "label": _day_label_ko(d),
-                "blocks": _blocks(by_date[d]),
+                "blocks": _merged_day_blocks(d),
             }
-            for d in sorted(by_date.keys())
+            for d in all_detail_days
         ]
 
     has_detail_blocks = any(g["blocks"] for g in detail_groups)
 
-    approved_member_schedule_ids = [
-        row[0]
-        for row in db.query(ScheduleApplication.schedule_id)
+    now_dt = datetime.now()
+    open_extra_schedules = (
+        db.query(Schedule)
+        .filter(Schedule.status == "open", Schedule.event_datetime >= now_dt)
+        .order_by(Schedule.event_datetime.asc())
+        .all()
+    )
+    hold_rows = (
+        db.query(
+            ScheduleApplication.schedule_id,
+            func.count(ScheduleApplication.id),
+        )
+        .filter(ScheduleApplication.status.in_(("pending", "approved")))
+        .group_by(ScheduleApplication.schedule_id)
+        .all()
+    )
+    extra_application_counts = {int(sid): int(n) for sid, n in hold_rows}
+    user_extra_holds = (
+        db.query(ScheduleApplication)
         .filter(
             ScheduleApplication.user_id == current_user.id,
-            ScheduleApplication.status == "approved",
+            ScheduleApplication.status.in_(("pending", "approved")),
         )
-        .order_by(ScheduleApplication.id.asc())
         .all()
-    ]
-    if approved_member_schedule_ids:
-        schedules = (
-            db.query(Schedule)
-            .filter(Schedule.id.in_(approved_member_schedule_ids))
-            .order_by(Schedule.event_datetime.asc())
-            .all()
-        )
-    else:
-        schedules = []
+    )
+    extra_schedule_hold_status = {a.schedule_id: a.status for a in user_extra_holds}
+
+    has_month_events = bool(events_in_month) or bool(member_schedules_by_date)
 
     ctx: dict[str, Any] = {
         "page_title": "스케줄",
@@ -852,8 +894,10 @@ def index(
         "detail_groups": detail_groups,
         "has_detail_blocks": has_detail_blocks,
         "sel_day": sel_day,
-        "has_month_events": bool(events_in_month),
-        "member_schedules": schedules,
+        "has_month_events": has_month_events,
+        "open_extra_schedules": open_extra_schedules,
+        "extra_application_counts": extra_application_counts,
+        "extra_schedule_hold_status": extra_schedule_hold_status,
     }
 
     return render(

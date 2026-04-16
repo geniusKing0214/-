@@ -40,15 +40,14 @@
                 </form>
             {% else %}
                 {% if schedule.status == "open" %}
-                <form method="post" action="/member/schedules/{{ schedule.id }}/apply">
-                    <button type="submit" class="btn btn-primary">신청하기</button>
-                </form>
+                <p class="form-hint" style="margin:0 0 12px">별도 모집 신청은 <strong>홈 화면</strong>에서만 할 수 있습니다.</p>
+                <a href="/?month={{ schedule.event_datetime.strftime('%Y-%m') }}#home-extra-schedules" class="btn btn-primary">홈으로 가서 신청하기</a>
                 {% else %}
                 <button type="button" class="btn btn-disabled" disabled>마감된 일정</button>
                 {% endif %}
             {% endif %}
 
-            <a href="/member/schedules/browse" class="btn btn-outline">모집 목록</a>
+            <a href="/?month={{ schedule.event_datetime.strftime('%Y-%m') }}#home-extra-schedules" class="btn btn-outline">홈 · 별도 모집</a>
         </div>
     </div>
 </div>
