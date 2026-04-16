@@ -1,19 +1,14 @@
 from datetime import date, datetime, timedelta
-from typing import Any
+from typing import Any, Dict
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request, status
 from fastapi.responses import RedirectResponse
-from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session, joinedload
 
 from app.database import get_db
-from app.models import Notification, Schedule, ScheduleApplication, User
-from app.template_globals import attach_template_globals
-from app.utils.auth import get_current_user
+from app.models import Schedule, ScheduleApplication, User
 
 router = APIRouter(prefix="/member/schedules", tags=["member_schedules"])
-templates = Jinja2Templates(directory="app/templates")
-attach_template_globals(templates)
 
 _WEEKDAY_KO = ("월", "화", "수", "목", "금", "토", "일")
 
@@ -81,12 +76,37 @@ def _group_member_apps_by_week(
     ]
 
 
-def _member_unread_count(user: User, db: Session) -> int:
-    return (
-        db.query(Notification)
-        .filter(Notification.user_id == user.id, Notification.is_read == False)
-        .count()
-    )
+def require_approved_user(request: Request, db: Session = Depends(get_db)) -> User:
+    """세션 기반 로그인·승인 확인(문자열 user_id 정수화 포함). HTML 라우트용."""
+    raw = request.session.get("user_id")
+    if raw is None:
+        raise HTTPException(status_code=401, detail="로그인이 필요합니다.")
+    try:
+        uid = int(raw)
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=401, detail="로그인이 필요합니다.")
+    user = db.query(User).filter(User.id == uid).first()
+    if not user:
+        raise HTTPException(status_code=401, detail="사용자 정보를 찾을 수 없습니다.")
+    approval = getattr(user, "approval_status", "approved")
+    if approval != "approved":
+        if approval == "pending_approval":
+            detail = "관리자 승인 대기 중입니다."
+        elif approval == "rejected":
+            detail = "관리자에 의해 계정이 거절되었습니다."
+        else:
+            detail = "계정 상태를 확인할 수 없습니다."
+        raise HTTPException(status_code=403, detail=detail)
+    return user
+
+
+def _member_html(
+    request: Request, template: str, ctx: Dict[str, Any], db: Session, user: User
+):
+    """main.render 와 동일한 템플릿 컨텍스트(순환 import 회피용 지연 import)."""
+    from app.main import render
+
+    return render(request, template, ctx, db, current_user=user)
 
 
 @router.get("")
@@ -102,7 +122,7 @@ def member_schedule_list():
 
 @router.get("/browse")
 def browse_open_member_schedules(
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_approved_user),
 ):
     """별도 모집 목록·신청은 홈 화면으로 통합됨."""
     today = date.today()
@@ -118,7 +138,7 @@ def my_schedule_applications(
     request: Request,
     group: str = Query("day"),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_approved_user),
 ):
     if group not in ("day", "week"):
         group = "day"
@@ -140,16 +160,16 @@ def my_schedule_applications(
     else:
         application_groups = _group_member_apps_by_day(applications)
 
-    return templates.TemplateResponse(
+    return _member_html(
+        request,
         "my_schedule_applications.html",
         {
-            "request": request,
-            "current_user": current_user,
             "page_title": "내 신청",
-            "unread_count": _member_unread_count(current_user, db),
             "application_groups": application_groups,
             "group_mode": group,
         },
+        db,
+        current_user,
     )
 
 
@@ -158,7 +178,7 @@ def member_schedule_detail(
     schedule_id: int,
     request: Request,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_approved_user),
 ):
     schedule = db.query(Schedule).filter(Schedule.id == schedule_id).first()
     if not schedule:
@@ -191,18 +211,18 @@ def member_schedule_detail(
         .count()
     )
 
-    return templates.TemplateResponse(
+    return _member_html(
+        request,
         "member_schedule_detail.html",
         {
-            "request": request,
-            "current_user": current_user,
             "page_title": "별도 모집 상세",
-            "unread_count": _member_unread_count(current_user, db),
             "schedule": schedule,
             "my_application": my_application,
             "hold_count": hold_count,
             "approved_count": approved_count,
         },
+        db,
+        current_user,
     )
 
 
@@ -210,7 +230,7 @@ def member_schedule_detail(
 def apply_schedule(
     schedule_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_approved_user),
 ):
     schedule = db.query(Schedule).filter(Schedule.id == schedule_id).first()
     if not schedule:
@@ -266,7 +286,7 @@ def apply_schedule(
 def cancel_schedule_application(
     schedule_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_approved_user),
 ):
     application = (
         db.query(ScheduleApplication)

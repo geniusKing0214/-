@@ -161,13 +161,8 @@ def get_current_user(request: Request, db: Session) -> Optional[User]:
 
 
 def get_unread_count(user: Optional[User], db: Session) -> int:
-    if not user:
-        return 0
-    return (
-        db.query(Notification)
-        .filter(Notification.user_id == user.id, Notification.is_read == False)
-        .count()
-    )
+    """알림 UI 제거: 배지·DB 조회 없음(항상 0)."""
+    return 0
 
 
 def redirect(url: str) -> RedirectResponse:
@@ -1046,32 +1041,9 @@ def my_applications(
 
 
 @app.get("/notifications", response_class=HTMLResponse)
-def notifications_page(request: Request, db: Session = Depends(get_db)):
-    user = get_current_user(request, db)
-    if not user:
-        return redirect("/login")
-
-    notifications = (
-        db.query(Notification)
-        .filter(Notification.user_id == user.id)
-        .order_by(Notification.created_at.desc())
-        .all()
-    )
-
-    (
-        db.query(Notification)
-        .filter(Notification.user_id == user.id, Notification.is_read == False)
-        .update({"is_read": True}, synchronize_session=False)
-    )
-    db.commit()
-
-    return render(
-        request,
-        "notifications.html",
-        {"page_title": "알림", "notifications": notifications},
-        db,
-        current_user=user,
-    )
+def notifications_page():
+    """알림 페이지 폐지 — 홈으로 보냄."""
+    return redirect("/")
 
 
 @app.get("/admin/events", response_class=HTMLResponse)

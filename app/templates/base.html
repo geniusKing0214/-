@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/css/style.css?v=20260424">
+    <link rel="stylesheet" href="/static/css/style.css?v=20260425">
 </head>
 <body>
     <div class="nav-mobile-backdrop" id="navMobileBackdrop" hidden aria-hidden="true"></div>
@@ -53,13 +53,6 @@
                 <li><a href="/?#home-extra-schedules" class="nav-link-extra-sched">별도 모집 일정</a></li>
                 <li><a href="/profile">프로필 · 닉네임</a></li>
                 <li><a href="/my-applications">내 신청</a></li>
-                <li>
-                    {% if unread_count and unread_count > 0 %}
-                    <a href="/notifications" class="nav-notify">알림 <span class="nav-badge">{{ unread_count }}</span></a>
-                    {% else %}
-                    <a href="/notifications">알림</a>
-                    {% endif %}
-                </li>
                 {% if current_user.is_admin %}
                 <li class="nav-list-heading"><span>관리자</span></li>
                 <li><a href="/admin/events/new">스케줄 생성</a></li>
