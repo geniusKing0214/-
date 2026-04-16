@@ -122,7 +122,7 @@ def _firebase_login_template_ctx(safe_next: Optional[str]) -> dict[str, Any]:
 @app.exception_handler(HTTPException)
 async def _http_exception_browser_redirect(request: Request, exc: HTTPException):
     if (
-        exc.status_code == status.HTTP_401_UNAUTHORIZED
+        exc.status_code in (status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN)
         and request.method == "GET"
         and not _wants_json_only(request)
     ):

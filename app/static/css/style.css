@@ -1772,6 +1772,10 @@ button.btn-google:hover {
     color: var(--cute-text);
 }
 
+#home-extra-schedules {
+    scroll-margin-top: 96px;
+}
+
 .sched-extra-apply-section {
     margin-top: 32px;
     padding-top: 26px;

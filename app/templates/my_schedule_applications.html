@@ -17,7 +17,7 @@
                     {% if group_mode == 'week' %}aria-current="page"{% endif %}
                 >주별</a>
             </div>
-            <a href="/member/schedules/browse" class="btn btn-outline btn-sm">모집 중 보기</a>
+            <a href="/?#home-extra-schedules" class="btn btn-outline btn-sm">별도 모집 신청</a>
         </div>
     </div>
 
@@ -39,6 +39,8 @@
                     <span class="badge success">승인됨</span>
                     {% elif app.status == "rejected" %}
                     <span class="badge danger">거절</span>
+                    {% elif app.status == "cancelled" %}
+                    <span class="badge">취소됨</span>
                     {% else %}
                     <span class="badge">{{ app.status }}</span>
                     {% endif %}

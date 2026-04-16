@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/css/style.css?v=20260423">
+    <link rel="stylesheet" href="/static/css/style.css?v=20260424">
 </head>
 <body>
     <div class="nav-mobile-backdrop" id="navMobileBackdrop" hidden aria-hidden="true"></div>
@@ -50,7 +50,7 @@
                 <li class="nav-list-heading"><span>바로가기</span></li>
                 {% if current_user %}
                 <li><a href="/">홈 · 일정</a></li>
-                <li><a href="/#home-extra-schedules">별도 모집 일정</a></li>
+                <li><a href="/?#home-extra-schedules" class="nav-link-extra-sched">별도 모집 일정</a></li>
                 <li><a href="/profile">프로필 · 닉네임</a></li>
                 <li><a href="/my-applications">내 신청</a></li>
                 <li>
@@ -140,6 +140,17 @@
                 btn.focus();
             }
         });
+
+        function scrollToHomeExtraSection() {
+            if (location.hash !== "#home-extra-schedules") return;
+            var el = document.getElementById("home-extra-schedules");
+            if (!el) return;
+            requestAnimationFrame(function () {
+                el.scrollIntoView({ block: "start", behavior: "smooth" });
+            });
+        }
+        document.addEventListener("DOMContentLoaded", scrollToHomeExtraSection);
+        window.addEventListener("hashchange", scrollToHomeExtraSection);
     })();
     </script>
     {% block scripts %}{% endblock %}

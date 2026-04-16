@@ -4,7 +4,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request, status
 from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.database import get_db
 from app.models import Notification, Schedule, ScheduleApplication, User
@@ -19,7 +19,7 @@ _WEEKDAY_KO = ("월", "화", "수", "목", "금", "토", "일")
 
 # 정원·중복 신청: 대기+승인 모두 점유. 취소 가능: 대기 또는 승인.
 _MEMBER_SCHEDULE_HOLD_STATUSES = ("pending", "approved")
-_MEMBER_SCHEDULE_LIST_STATUSES = ("pending", "approved", "rejected")
+_MEMBER_SCHEDULE_LIST_STATUSES = ("pending", "approved", "rejected", "cancelled")
 
 
 def _day_label_ko(d: date) -> str:
@@ -126,6 +126,7 @@ def my_schedule_applications(
     applications = (
         db.query(ScheduleApplication)
         .join(Schedule, Schedule.id == ScheduleApplication.schedule_id)
+        .options(joinedload(ScheduleApplication.schedule))
         .filter(
             ScheduleApplication.user_id == current_user.id,
             ScheduleApplication.status.in_(_MEMBER_SCHEDULE_LIST_STATUSES),
@@ -289,5 +290,5 @@ def cancel_schedule_application(
         month_param = f"{dt.year}-{dt.month:02d}"
         loc = f"/?month={month_param}#home-extra-schedules"
     else:
-        loc = "/#home-extra-schedules"
+        loc = "/?#home-extra-schedules"
     return RedirectResponse(url=loc, status_code=status.HTTP_303_SEE_OTHER)
