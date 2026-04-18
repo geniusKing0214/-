@@ -5,17 +5,25 @@
 # 재배포마다 바뀌지 않도록 한 값으로 고정하세요(세션만 풀리고 DB는 유지됩니다).
 #
 # 새로 연결할 때: Blueprint로 이 파일을 적용하거나, 아래 블록을 참고해 수동 생성합니다.
+#
+# Firebase·관리자 메일 등은 Render 대시보드 → 웹 서비스 → Environment 에서 추가하세요.
+# (FIREBASE_WEB_API_KEY, FIREBASE_AUTH_DOMAIN, FIREBASE_PROJECT_ID, FIREBASE_APP_ID,
+#  FIREBASE_MESSAGING_SENDER_ID, FIREBASE_STORAGE_BUCKET, FIREBASE_CREDENTIALS_JSON 등)
 
 databases:
   - name: scheduler-db
     databaseName: scheduler
     user: scheduler
+    region: oregon
 
 services:
   - type: web
     name: scheduler-web
     runtime: docker
+    region: oregon
     dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /health
     envVars:
       - key: DATABASE_URL
         fromDatabase:
@@ -24,4 +32,6 @@ services:
       - key: SESSION_SECRET_KEY
         generateValue: true
       - key: SESSION_COOKIE_SECURE
+        value: "true"
+      - key: RENDER
         value: "true"

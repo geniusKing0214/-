@@ -80,41 +80,74 @@
 
     <section class="app-group" aria-labelledby="ops-applications">
         <h2 class="app-group-title" id="ops-applications">스케줄 신청 검토</h2>
-        {% if applications %}
-        <ul class="app-row-list">
-            {% for a in applications %}
+        <h3 class="app-subheading" id="ops-slot-pending">검토 대기 (슬롯)</h3>
+        {% if slot_applications_pending %}
+        <ul class="app-row-list" aria-labelledby="ops-slot-pending">
+            {% for a in slot_applications_pending %}
             <li class="app-row-compact admin-event-row admin-ops-app-row">
                 <span class="app-row-title" title="{{ a.event.title }}">{{ a.event.title }}</span>
                 <span class="app-row-datetime">
                     {{ a.event.event_date.strftime("%Y-%m-%d") }} {{ a.slot.start_time.strftime("%H:%M") }}
                 </span>
                 <span class="app-row-stats">{{ display_name(a.user) }}</span>
-                <span class="app-row-badge">
-                    {% if a.status == "pending" %}
-                    <span class="badge warning">대기</span>
-                    {% elif a.status == "approved" %}
-                    <span class="badge success">승인</span>
-                    {% elif a.status == "rejected" %}
-                    <span class="badge danger">거절</span>
-                    {% else %}
-                    <span class="badge">{{ a.status }}</span>
-                    {% endif %}
-                </span>
+                <span class="app-row-badge"><span class="badge warning">대기</span></span>
                 <span class="admin-event-actions operations-actions">
-                    {% if a.status == "pending" %}
                     <form method="post" action="/admin/applications/{{ a.id }}/approve" class="inline-form">
                         <button type="submit" class="btn btn-primary btn-sm">승인</button>
                     </form>
                     <form method="post" action="/admin/applications/{{ a.id }}/reject" class="inline-form">
                         <button type="submit" class="btn btn-outline btn-sm">거절</button>
                     </form>
-                    {% endif %}
                 </span>
             </li>
             {% endfor %}
         </ul>
         {% else %}
-        <div class="empty-box">스케줄 신청 내역이 없습니다.</div>
+        <div class="empty-box">검토 대기 중인 슬롯 신청이 없습니다.</div>
+        {% endif %}
+
+        <h3 class="app-subheading" id="ops-slot-approved" style="margin-top:1.25rem">승인된 신청 (회원·이벤트 기준)</h3>
+        {% if slot_applications_approved %}
+        <ul class="app-row-list" aria-labelledby="ops-slot-approved">
+            {% for a in slot_applications_approved %}
+            <li class="app-row-compact admin-event-row admin-ops-app-row">
+                <span class="app-row-title" title="{{ a.event.title }}">{{ a.event.title }}</span>
+                <span class="app-row-datetime">
+                    {{ a.event.event_date.strftime("%Y-%m-%d") }} {{ a.slot.start_time.strftime("%H:%M") }}
+                </span>
+                <span class="app-row-stats">{{ display_name(a.user) }}</span>
+                <span class="app-row-badge"><span class="badge success">승인</span></span>
+            </li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <div class="empty-box">승인된 슬롯 신청이 없습니다.</div>
+        {% endif %}
+
+        {% if slot_applications_rejected or slot_applications_other %}
+        <h3 class="app-subheading" id="ops-slot-other" style="margin-top:1.25rem">거절·기타</h3>
+        <ul class="app-row-list" aria-labelledby="ops-slot-other">
+            {% for a in slot_applications_rejected %}
+            <li class="app-row-compact admin-event-row admin-ops-app-row">
+                <span class="app-row-title" title="{{ a.event.title }}">{{ a.event.title }}</span>
+                <span class="app-row-datetime">
+                    {{ a.event.event_date.strftime("%Y-%m-%d") }} {{ a.slot.start_time.strftime("%H:%M") }}
+                </span>
+                <span class="app-row-stats">{{ display_name(a.user) }}</span>
+                <span class="app-row-badge"><span class="badge danger">거절</span></span>
+            </li>
+            {% endfor %}
+            {% for a in slot_applications_other %}
+            <li class="app-row-compact admin-event-row admin-ops-app-row">
+                <span class="app-row-title" title="{{ a.event.title }}">{{ a.event.title }}</span>
+                <span class="app-row-datetime">
+                    {{ a.event.event_date.strftime("%Y-%m-%d") }} {{ a.slot.start_time.strftime("%H:%M") }}
+                </span>
+                <span class="app-row-stats">{{ display_name(a.user) }}</span>
+                <span class="app-row-badge"><span class="badge">{{ a.status }}</span></span>
+            </li>
+            {% endfor %}
+        </ul>
         {% endif %}
     </section>
 

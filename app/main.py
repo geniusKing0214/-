@@ -169,6 +169,15 @@ def redirect(url: str) -> RedirectResponse:
     return RedirectResponse(url=url, status_code=status.HTTP_303_SEE_OTHER)
 
 
+def _notification_message(text: str, max_len: int = 255) -> str:
+    """notifications.message 컬럼 길이 제한(PostgreSQL 등) 초과 시 잘라서 500 방지."""
+    if len(text) <= max_len:
+        return text
+    if max_len <= 1:
+        return text[:max_len]
+    return text[: max_len - 1] + "…"
+
+
 def _set_if_present(model_obj, field_name: str, value) -> None:
     if hasattr(model_obj, field_name):
         setattr(model_obj, field_name, value)
@@ -362,6 +371,24 @@ def _parse_sel_day(raw: Optional[str]) -> Optional[date]:
         return datetime.strptime(str(raw).strip()[:10], "%Y-%m-%d").date()
     except ValueError:
         return None
+
+
+def _load_events_for_month(db: Session, y: int, m: int) -> tuple[list[Event], dict[date, list[Event]]]:
+    first = date(y, m, 1)
+    last = date(y, m, calendar_mod.monthrange(y, m)[1])
+    events_in_month = (
+        db.query(Event)
+        .options(joinedload(Event.slots))
+        .filter(Event.event_date >= first, Event.event_date <= last)
+        .order_by(Event.event_date.asc(), Event.id.asc())
+        .all()
+    )
+    for e in events_in_month:
+        e.slots = [s for s in e.slots if s.is_active]
+    by_date: dict[date, list[Event]] = {}
+    for e in events_in_month:
+        by_date.setdefault(e.event_date, []).append(e)
+    return events_in_month, by_date
 
 
 def _home_slots_ui(db: Session, user: Optional[User], event: Event) -> list[dict[str, Any]]:
@@ -729,23 +756,14 @@ def profile_update(
     return redirect("/profile?updated=1")
 
 
-@app.get("/", response_class=HTMLResponse)
-def index(
-    request: Request,
-    month: Optional[str] = Query(None),
-    sel: Optional[str] = Query(None),
-    db: Session = Depends(get_db),
-):
-    current_user = get_current_user(request, db)
-    if not current_user:
-        return _redirect_login_for_home(request)
-    approval = getattr(current_user, "approval_status", "approved")
-    if approval != "approved":
-        request.session.clear()
-        if approval == "rejected":
-            return redirect("/login?error=google_rejected")
-        return redirect("/login?error=google_pending")
-
+def _sched_home_view_context(
+    db: Session,
+    current_user: User,
+    month: Optional[str],
+    sel: Optional[str],
+    view: str,
+) -> dict[str, Any]:
+    """view: admin_merged | member_personal | member_events"""
     y, m = _parse_home_month(month)
     month_param = f"{y}-{m:02d}"
     py, pm = _shift_calendar_month(y, m, -1)
@@ -753,35 +771,30 @@ def index(
     first = date(y, m, 1)
     last = date(y, m, calendar_mod.monthrange(y, m)[1])
 
-    events_in_month = (
-        db.query(Event)
-        .options(joinedload(Event.slots))
-        .filter(Event.event_date >= first, Event.event_date <= last)
-        .order_by(Event.event_date.asc(), Event.id.asc())
-        .all()
-    )
-    for e in events_in_month:
-        e.slots = [s for s in e.slots if s.is_active]
+    if view == "member_personal":
+        events_in_month: list[Event] = []
+        by_date: dict[date, list[Event]] = {}
+    else:
+        events_in_month, by_date = _load_events_for_month(db, y, m)
 
-    by_date: dict[date, list[Event]] = {}
-    for e in events_in_month:
-        by_date.setdefault(e.event_date, []).append(e)
-
-    approved_member_schedules = (
-        db.query(Schedule)
-        .join(ScheduleApplication, ScheduleApplication.schedule_id == Schedule.id)
-        .filter(
-            ScheduleApplication.user_id == current_user.id,
-            ScheduleApplication.status == "approved",
+    if view == "member_events":
+        member_schedules_by_date: dict[date, list[Schedule]] = {}
+    else:
+        approved_member_schedules = (
+            db.query(Schedule)
+            .join(ScheduleApplication, ScheduleApplication.schedule_id == Schedule.id)
+            .filter(
+                ScheduleApplication.user_id == current_user.id,
+                ScheduleApplication.status == "approved",
+            )
+            .order_by(Schedule.event_datetime.asc())
+            .all()
         )
-        .order_by(Schedule.event_datetime.asc())
-        .all()
-    )
-    member_schedules_by_date: dict[date, list[Schedule]] = {}
-    for s in approved_member_schedules:
-        sd = s.event_datetime.date()
-        if first <= sd <= last:
-            member_schedules_by_date.setdefault(sd, []).append(s)
+        member_schedules_by_date = {}
+        for s in approved_member_schedules:
+            sd = s.event_datetime.date()
+            if first <= sd <= last:
+                member_schedules_by_date.setdefault(sd, []).append(s)
 
     cal = calendar_mod.Calendar(firstweekday=0)
     cal_weeks: list[list[dict[str, Any]]] = []
@@ -790,6 +803,12 @@ def index(
         for d in week:
             n_ev = len(by_date.get(d, []))
             n_ms = len(member_schedules_by_date.get(d, []))
+            if view == "member_personal":
+                marker = min(n_ms, 3)
+            elif view == "member_events":
+                marker = min(n_ev, 3)
+            else:
+                marker = min(n_ev + n_ms, 3)
             row.append(
                 {
                     "date": d,
@@ -797,7 +816,7 @@ def index(
                     "is_today": d == date.today(),
                     "event_count": n_ev,
                     "member_approved_schedule_count": n_ms,
-                    "calendar_marker_count": min(n_ev + n_ms, 3),
+                    "calendar_marker_count": marker,
                 }
             )
         cal_weeks.append(row)
@@ -818,6 +837,17 @@ def index(
         ]
 
     def _merged_day_blocks(day: date) -> list[dict[str, Any]]:
+        if view == "member_personal":
+            return [
+                {
+                    "kind": "member_schedule",
+                    "schedule": s,
+                    "time_label": s.event_datetime.strftime("%Y-%m-%d %H:%M"),
+                }
+                for s in member_schedules_by_date.get(day, [])
+            ]
+        if view == "member_events":
+            return _blocks(by_date.get(day, []))
         out = _blocks(by_date.get(day, []))
         for s in member_schedules_by_date.get(day, []):
             out.append(
@@ -829,7 +859,13 @@ def index(
             )
         return out
 
-    all_detail_days = sorted(set(by_date.keys()) | set(member_schedules_by_date.keys()))
+    if view == "member_personal":
+        all_detail_days = sorted(member_schedules_by_date.keys())
+    elif view == "member_events":
+        all_detail_days = sorted(by_date.keys())
+    else:
+        all_detail_days = sorted(set(by_date.keys()) | set(member_schedules_by_date.keys()))
+
     if sel_day:
         detail_groups = [
             {
@@ -848,37 +884,43 @@ def index(
 
     has_detail_blocks = any(g["blocks"] for g in detail_groups)
 
-    now_dt = datetime.now()
-    open_extra_schedules = (
-        db.query(Schedule)
-        .filter(Schedule.status == "open", Schedule.event_datetime >= now_dt)
-        .order_by(Schedule.event_datetime.asc())
-        .all()
-    )
-    hold_rows = (
-        db.query(
-            ScheduleApplication.schedule_id,
-            func.count(ScheduleApplication.id),
-        )
-        .filter(ScheduleApplication.status.in_(("pending", "approved")))
-        .group_by(ScheduleApplication.schedule_id)
-        .all()
-    )
-    extra_application_counts = {int(sid): int(n) for sid, n in hold_rows}
-    user_extra_holds = (
-        db.query(ScheduleApplication)
-        .filter(
-            ScheduleApplication.user_id == current_user.id,
-            ScheduleApplication.status.in_(("pending", "approved")),
-        )
-        .all()
-    )
-    extra_schedule_hold_status = {a.schedule_id: a.status for a in user_extra_holds}
+    if view == "member_personal":
+        has_month_events = bool(member_schedules_by_date)
+    elif view == "member_events":
+        has_month_events = bool(events_in_month)
+    else:
+        has_month_events = bool(events_in_month) or bool(member_schedules_by_date)
 
-    has_month_events = bool(events_in_month) or bool(member_schedules_by_date)
+    if view == "member_personal":
+        page_title = "스케줄"
+        sched_detail_section_title = "내 일정"
+        sched_hero_subtitle = (
+            "승인된 별도 일정만 달력에 표시됩니다. "
+            "일반 일정·슬롯 신청은 메뉴의 「일반 일정·슬롯 신청」에서 할 수 있어요."
+        )
+        sched_calendar_base_path = "/"
+        sched_home_show_event_blocks = False
+        sched_home_show_member_blocks = True
+        sched_home_personal_only = True
+    elif view == "member_events":
+        page_title = "일반 일정·슬롯"
+        sched_detail_section_title = "슬롯 신청"
+        sched_hero_subtitle = "이벤트·시간 슬롯을 신청할 수 있어요."
+        sched_calendar_base_path = "/member/slot-calendar"
+        sched_home_show_event_blocks = True
+        sched_home_show_member_blocks = False
+        sched_home_personal_only = False
+    else:
+        page_title = "스케줄"
+        sched_detail_section_title = "슬롯 신청"
+        sched_hero_subtitle = "일정을 달력에서 고른 뒤 슬롯을 신청할 수 있어요."
+        sched_calendar_base_path = "/"
+        sched_home_show_event_blocks = True
+        sched_home_show_member_blocks = True
+        sched_home_personal_only = False
 
-    ctx: dict[str, Any] = {
-        "page_title": "스케줄",
+    return {
+        "page_title": page_title,
         "cal_year": y,
         "cal_month": m,
         "month_param": month_param,
@@ -890,10 +932,63 @@ def index(
         "has_detail_blocks": has_detail_blocks,
         "sel_day": sel_day,
         "has_month_events": has_month_events,
-        "open_extra_schedules": open_extra_schedules,
-        "extra_application_counts": extra_application_counts,
-        "extra_schedule_hold_status": extra_schedule_hold_status,
+        "sched_detail_section_title": sched_detail_section_title,
+        "sched_hero_subtitle": sched_hero_subtitle,
+        "sched_calendar_base_path": sched_calendar_base_path,
+        "sched_home_show_event_blocks": sched_home_show_event_blocks,
+        "sched_home_show_member_blocks": sched_home_show_member_blocks,
+        "sched_home_personal_only": sched_home_personal_only,
     }
+
+
+@app.get("/", response_class=HTMLResponse)
+def index(
+    request: Request,
+    month: Optional[str] = Query(None),
+    sel: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+):
+    current_user = get_current_user(request, db)
+    if not current_user:
+        return _redirect_login_for_home(request)
+    approval = getattr(current_user, "approval_status", "approved")
+    if approval != "approved":
+        request.session.clear()
+        if approval == "rejected":
+            return redirect("/login?error=google_rejected")
+        return redirect("/login?error=google_pending")
+
+    is_admin = bool(getattr(current_user, "is_admin", False))
+    view = "admin_merged" if is_admin else "member_personal"
+    ctx = _sched_home_view_context(db, current_user, month, sel, view)
+
+    return render(
+        request,
+        "home.html",
+        ctx,
+        db,
+        current_user=current_user,
+    )
+
+
+@app.get("/member/slot-calendar", response_class=HTMLResponse)
+def member_slot_calendar(
+    request: Request,
+    month: Optional[str] = Query(None),
+    sel: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+):
+    current_user = get_current_user(request, db)
+    if not current_user:
+        return _redirect_login_for_home(request)
+    approval = getattr(current_user, "approval_status", "approved")
+    if approval != "approved":
+        request.session.clear()
+        if approval == "rejected":
+            return redirect("/login?error=google_rejected")
+        return redirect("/login?error=google_pending")
+
+    ctx = _sched_home_view_context(db, current_user, month, sel, "member_events")
 
     return render(
         request,
@@ -915,6 +1010,10 @@ def apply_to_slot(
     if not user:
         return redirect("/login")
 
+    slot_apply_redirect = (
+        "/member/slot-calendar" if not getattr(user, "is_admin", False) else "/"
+    )
+
     slot = (
         db.query(EventSlot)
         .options(joinedload(EventSlot.event))
@@ -922,10 +1021,10 @@ def apply_to_slot(
         .first()
     )
     if not slot:
-        return redirect("/")
+        return redirect(slot_apply_redirect)
 
     if slot.is_active is False:
-        return redirect("/")
+        return redirect(slot_apply_redirect)
 
     active_existing = (
         db.query(Application)
@@ -961,7 +1060,7 @@ def apply_to_slot(
         .count()
     )
     if approved_count >= slot.capacity:
-        return redirect("/")
+        return redirect(slot_apply_redirect)
 
     if reusable_rejected:
         reusable_rejected.status = "pending"
@@ -982,17 +1081,47 @@ def apply_to_slot(
         db.flush()
 
     admins = db.query(User).filter(User.is_admin == True).all()
+    notify_text = (
+        f"{user_display_name(user)}님이 '{slot.event.title}' "
+        f"{slot.start_time.strftime('%H:%M')} 슬롯에 신청했습니다."
+    )
     for admin in admins:
         db.add(
             Notification(
                 user_id=admin.id,
-                message=f"{user_display_name(user)}님이 '{slot.event.title}' {slot.start_time.strftime('%H:%M')} 슬롯에 신청했습니다.",
+                message=_notification_message(notify_text),
                 is_read=False,
             )
         )
 
     db.commit()
     return redirect("/my-applications")
+
+
+def _applications_for_user_list(db: Session, user_id: int) -> list[Application]:
+    """내 신청 목록용: Postgres에서 joinedload 다중 경로 500을 피하려고 이벤트·슬롯을 따로 조회해 붙인다."""
+    apps = (
+        db.query(Application)
+        .filter(Application.user_id == user_id)
+        .order_by(Application.id.desc())
+        .all()
+    )
+    if not apps:
+        return []
+    eids = {a.event_id for a in apps}
+    sids = {a.slot_id for a in apps}
+    ev_map = {e.id: e for e in db.query(Event).filter(Event.id.in_(eids)).all()}
+    sl_map = {s.id: s for s in db.query(EventSlot).filter(EventSlot.id.in_(sids)).all()}
+    out: list[Application] = []
+    for a in apps:
+        e = ev_map.get(a.event_id)
+        s = sl_map.get(a.slot_id)
+        if e is None or s is None:
+            continue
+        a.event = e
+        a.slot = s
+        out.append(a)
+    return out
 
 
 @app.get("/my-applications", response_class=HTMLResponse)
@@ -1008,18 +1137,7 @@ def my_applications(
     if group not in ("day", "week"):
         group = "day"
 
-    # join + joinedload(Application.event) 동시 사용 시 SQLAlchemy가 경로를 꼬아 500이 날 수 있음(특히 Postgres).
-    applications = (
-        db.query(Application)
-        .options(joinedload(Application.event), joinedload(Application.slot))
-        .filter(Application.user_id == user.id)
-        .all()
-    )
-    applications = [
-        a
-        for a in applications
-        if a.event is not None and a.slot is not None
-    ]
+    applications = _applications_for_user_list(db, user.id)
     applications.sort(key=_application_event_dt, reverse=True)
 
     if group == "week":
@@ -1284,6 +1402,12 @@ def admin_operations(request: Request, db: Session = Depends(get_db)):
         .order_by(Application.created_at.desc())
         .all()
     )
+    slot_applications_pending = [a for a in applications if a.status == "pending"]
+    slot_applications_approved = [a for a in applications if a.status == "approved"]
+    slot_applications_rejected = [a for a in applications if a.status == "rejected"]
+    slot_applications_other = [
+        a for a in applications if a.status not in ("pending", "approved", "rejected")
+    ]
 
     pending_users = (
         db.query(User)
@@ -1327,6 +1451,10 @@ def admin_operations(request: Request, db: Session = Depends(get_db)):
         {
             "page_title": "운영 · 회원가입 승인",
             "applications": applications,
+            "slot_applications_pending": slot_applications_pending,
+            "slot_applications_approved": slot_applications_approved,
+            "slot_applications_rejected": slot_applications_rejected,
+            "slot_applications_other": slot_applications_other,
             "pending_users": pending_users,
             "notifications": notifications,
             "pending_count": pending_count,

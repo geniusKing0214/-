@@ -4,16 +4,16 @@
 <div class="sched-page">
     <header class="sched-hero">
         <h1 class="sched-title">달력형 신청 스케줄러</h1>
-        <p class="sched-greeting">일정을 달력에서 고른 뒤 슬롯을 신청할 수 있어요.</p>
+        <p class="sched-greeting">{{ sched_hero_subtitle }}</p>
     </header>
 
     <section class="sched-calendar-section" aria-labelledby="sched-cal-heading">
         <div class="sched-cal-toolbar">
             <h2 id="sched-cal-heading" class="sched-h2 sched-h2-inline">일정 달력</h2>
             <div class="sched-month-nav">
-                <a class="btn btn-outline btn-sm" href="/?month={{ prev_month_param }}{% if sel_day %}&sel={{ sel_day.isoformat() }}{% endif %}" aria-label="이전 달">‹</a>
+                <a class="btn btn-outline btn-sm" href="{{ sched_calendar_base_path }}?month={{ prev_month_param }}{% if sel_day %}&sel={{ sel_day.isoformat() }}{% endif %}" aria-label="이전 달">‹</a>
                 <span class="sched-month-label">{{ cal_year }}년 {{ cal_month }}월</span>
-                <a class="btn btn-outline btn-sm" href="/?month={{ next_month_param }}{% if sel_day %}&sel={{ sel_day.isoformat() }}{% endif %}" aria-label="다음 달">›</a>
+                <a class="btn btn-outline btn-sm" href="{{ sched_calendar_base_path }}?month={{ next_month_param }}{% if sel_day %}&sel={{ sel_day.isoformat() }}{% endif %}" aria-label="다음 달">›</a>
             </div>
         </div>
 
@@ -28,7 +28,7 @@
                 {% for cell in week %}
                 {% if cell.in_month %}
                 <a
-                    href="/?month={{ month_param }}&sel={{ cell.date.isoformat() }}"
+                    href="{{ sched_calendar_base_path }}?month={{ month_param }}&sel={{ cell.date.isoformat() }}"
                     class="sched-cal-cell {% if cell.is_today %}is-today{% endif %} {% if sel_day and cell.date == sel_day %}is-selected{% endif %}"
                 >
                     <span class="sched-cal-num">{{ cell.date.day }}</span>
@@ -53,20 +53,20 @@
 
         {% if sel_day %}
         <p class="sched-sel-banner">
-            <a href="/?month={{ month_param }}" class="sched-link-all">전체 {{ cal_month }}월 일정 보기</a>
+            <a href="{{ sched_calendar_base_path }}?month={{ month_param }}" class="sched-link-all">전체 {{ cal_month }}월 일정 보기</a>
             <span class="sched-sel-text">선택: <strong>{{ sel_day.strftime("%Y-%m-%d") }}</strong></span>
         </p>
         {% endif %}
     </section>
 
     <section class="sched-detail-section" aria-labelledby="sched-detail-h">
-        <h2 id="sched-detail-h" class="sched-h2">슬롯 신청</h2>
+        <h2 id="sched-detail-h" class="sched-h2">{{ sched_detail_section_title }}</h2>
         {% if has_detail_blocks %}
         {% for g in detail_groups %}
         {% if g.blocks %}
         <h3 class="sched-day-label">{{ g.label }}</h3>
         {% for block in g.blocks %}
-        {% if block.kind == "member_schedule" %}
+        {% if block.kind == "member_schedule" and sched_home_show_member_blocks %}
         {% set s = block.schedule %}
         <article class="sched-event-card card sched-extra-approved-card" id="extra-schedule-{{ s.id }}">
             <div class="sched-event-top">
@@ -81,7 +81,7 @@
             {% endif %}
             <p class="sched-empty-inline"><a href="/member/schedules/{{ s.id }}" class="btn btn-outline btn-sm">상세·취소</a></p>
         </article>
-        {% else %}
+        {% elif block.kind == "event" and sched_home_show_event_blocks %}
         {% set event = block.event %}
         <article class="sched-event-card card" id="event-{{ event.id }}">
             <div class="sched-event-top">
@@ -130,58 +130,38 @@
         {% endfor %}
         {% else %}
         <div class="sched-empty-dashed">
-            {% if has_month_events %}
-            이 날짜에 등록된 일정이 없어요. 다른 날을 눌러 보세요.
+            {% if sched_home_personal_only %}
+                {% if has_month_events %}
+                이 날짜에 승인된 별도 일정이 없어요. 다른 날을 눌러 보세요.
+                {% else %}
+                이번 달에 승인된 별도 일정이 없어요.
+                {% endif %}
             {% else %}
-            이번 달에 등록된 일정이 없어요.{% if current_user.is_admin %} 메뉴의 <strong>스케줄 생성</strong>에서 일정을 등록해 보세요.{% endif %}
+                {% if has_month_events %}
+                이 날짜에 등록된 일정이 없어요. 다른 날을 눌러 보세요.
+                {% else %}
+                이번 달에 등록된 일정이 없어요.{% if current_user.is_admin %} 메뉴의 <strong>스케줄 생성</strong>에서 일정을 등록해 보세요.{% endif %}
+                {% endif %}
             {% endif %}
         </div>
         {% endif %}
     </section>
-
-    <section id="home-extra-schedules" class="sched-extra-apply-section compact-calendar" aria-labelledby="home-extra-h">
-        <div class="sched-member-head">
-            <h2 id="home-extra-h" class="sched-h2">별도 모집 신청</h2>
-        </div>
-        <p class="form-hint sched-member-hint">별도 모집은 <strong>이 화면에서만</strong> 신청할 수 있습니다. 달력에는 내가 신청해 <strong>승인된</strong> 별도 일정만 표시됩니다.</p>
-        <div class="card-list sched-member-cards">
-            {% for schedule in open_extra_schedules %}
-            {% set current_count = extra_application_counts.get(schedule.id, 0) %}
-            <div class="card">
-                <div class="card-body">
-                    <h3 class="sched-member-card-title">{{ schedule.title }}</h3>
-                    {% if schedule.description %}
-                    <p class="text-muted">{{ schedule.description }}</p>
-                    {% endif %}
-                    <div class="info-row"><strong>장소:</strong> {{ schedule.location or "-" }}</div>
-                    <div class="info-row"><strong>일시:</strong> {{ schedule.event_datetime.strftime("%Y-%m-%d %H:%M") }}</div>
-                    <div class="info-row">
-                        <strong>신청 인원:</strong>
-                        {{ current_count }}{% if schedule.recruit_limit > 0 %} / {{ schedule.recruit_limit }}{% else %} / 무제한{% endif %}
-                    </div>
-                    <div class="card-actions">
-                        {% set st = extra_schedule_hold_status.get(schedule.id) %}
-                        {% if st == "pending" %}
-                        <span class="badge warning">승인 대기</span>
-                        <a href="/member/schedules/{{ schedule.id }}" class="btn btn-outline btn-sm">상세</a>
-                        {% elif st == "approved" %}
-                        <span class="badge success">승인됨</span>
-                        <a href="/member/schedules/{{ schedule.id }}" class="btn btn-outline btn-sm">상세</a>
-                        {% else %}
-                        <form method="post" action="/member/schedules/{{ schedule.id }}/apply" class="inline-form">
-                            <button type="submit" class="btn btn-primary">신청하기</button>
-                        </form>
-                        <a href="/member/schedules/{{ schedule.id }}" class="btn btn-outline btn-sm">상세보기</a>
-                        {% endif %}
-                    </div>
-                </div>
-            </div>
-            {% else %}
-            <div class="empty-box sched-member-empty">
-                모집 중인 별도 일정이 없습니다.
-            </div>
-            {% endfor %}
-        </div>
-    </section>
 </div>
+{% endblock %}
+
+{% block scripts %}
+{% if sched_calendar_base_path == "/member/slot-calendar" %}
+<script>
+(function () {
+    function scrollToEventHash() {
+        var h = location.hash;
+        if (!h || h.indexOf("#event-") !== 0) return;
+        var el = document.getElementById(h.slice(1));
+        if (el) el.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    }
+    document.addEventListener("DOMContentLoaded", scrollToEventHash);
+    window.addEventListener("hashchange", scrollToEventHash);
+})();
+</script>
+{% endif %}
 {% endblock %}

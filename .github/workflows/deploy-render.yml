@@ -1,0 +1,32 @@
+# Render 대시보드 → 웹 서비스 → Settings → Deploy Hook → URL 생성 후
+# GitHub → Settings → Secrets and variables → Actions → RENDER_DEPLOY_HOOK_URL 로 등록
+
+name: Trigger Render deploy
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-render
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger deploy hook
+        env:
+          HOOK: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+        run: |
+          if [ -z "${HOOK}" ]; then
+            echo "RENDER_DEPLOY_HOOK_URL 가 없어 Render 자동 배포를 건너뜁니다."
+            echo "설정: Render → scheduler-web → Settings → Deploy Hook → GitHub Secret 에 URL 저장"
+            exit 0
+          fi
+          curl -fsS -X POST "$HOOK"
+          echo "Render 배포 트리거 완료"

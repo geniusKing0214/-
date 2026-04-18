@@ -757,6 +757,13 @@ textarea {
     letter-spacing: -0.02em;
 }
 
+.app-subheading {
+    margin: 0 0 8px;
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: var(--cute-muted);
+}
+
 .app-row-list {
     list-style: none;
     margin: 0;
@@ -1770,16 +1777,6 @@ button.btn-google:hover {
     font-size: 1.05rem;
     font-weight: 800;
     color: var(--cute-text);
-}
-
-#home-extra-schedules {
-    scroll-margin-top: 96px;
-}
-
-.sched-extra-apply-section {
-    margin-top: 32px;
-    padding-top: 26px;
-    border-top: 1px dashed rgba(203, 213, 225, 0.85);
 }
 
 .sched-extra-approved-card {

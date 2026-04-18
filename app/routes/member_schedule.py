@@ -3,6 +3,7 @@ from typing import Any, Dict
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request, status
 from fastapi.responses import RedirectResponse
+from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
 from app.database import get_db
@@ -110,26 +111,89 @@ def _member_html(
 
 
 @router.get("")
-def member_schedule_list():
-    """루트 /member/schedules 는 홈의 별도 모집 신청 구역으로 보냅니다."""
-    today = date.today()
-    month_param = f"{today.year}-{today.month:02d}"
-    return RedirectResponse(
-        url=f"/?month={month_param}#home-extra-schedules",
-        status_code=status.HTTP_303_SEE_OTHER,
+def member_schedule_list(
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_approved_user),
+):
+    """내게 승인된 별도 일정만 (메뉴 · 별도 모집 일정)."""
+    schedules = (
+        db.query(Schedule)
+        .join(ScheduleApplication, ScheduleApplication.schedule_id == Schedule.id)
+        .filter(
+            ScheduleApplication.user_id == current_user.id,
+            ScheduleApplication.status == "approved",
+        )
+        .order_by(Schedule.event_datetime.asc())
+        .all()
+    )
+
+    return _member_html(
+        request,
+        "member_schedule_list.html",
+        {
+            "page_title": "내 승인 별도 일정",
+            "schedules": schedules,
+        },
+        db,
+        current_user,
     )
 
 
 @router.get("/browse")
-def browse_open_member_schedules(
+def browse_open_member_schedules():
+    """레거시 URL: 모집 중 목록으로 안내."""
+    return RedirectResponse(
+        url="/member/schedules/open",
+        status_code=status.HTTP_303_SEE_OTHER,
+    )
+
+
+@router.get("/open")
+def member_schedule_recruiting(
+    request: Request,
+    db: Session = Depends(get_db),
     current_user: User = Depends(require_approved_user),
 ):
-    """별도 모집 목록·신청은 홈 화면으로 통합됨."""
-    today = date.today()
-    month_param = f"{today.year}-{today.month:02d}"
-    return RedirectResponse(
-        url=f"/?month={month_param}#home-extra-schedules",
-        status_code=status.HTTP_303_SEE_OTHER,
+    """모집 중인 별도 일정 전체 — 신청·검토용."""
+    now_dt = datetime.now()
+    schedules = (
+        db.query(Schedule)
+        .filter(Schedule.status == "open", Schedule.event_datetime >= now_dt)
+        .order_by(Schedule.event_datetime.asc())
+        .all()
+    )
+    hold_rows = (
+        db.query(
+            ScheduleApplication.schedule_id,
+            func.count(ScheduleApplication.id),
+        )
+        .filter(ScheduleApplication.status.in_(("pending", "approved")))
+        .group_by(ScheduleApplication.schedule_id)
+        .all()
+    )
+    application_counts = {int(sid): int(n) for sid, n in hold_rows}
+    user_holds = (
+        db.query(ScheduleApplication)
+        .filter(
+            ScheduleApplication.user_id == current_user.id,
+            ScheduleApplication.status.in_(("pending", "approved")),
+        )
+        .all()
+    )
+    schedule_hold_status = {a.schedule_id: a.status for a in user_holds}
+
+    return _member_html(
+        request,
+        "member_schedule_recruiting.html",
+        {
+            "page_title": "모집 중 별도 일정",
+            "schedules": schedules,
+            "application_counts": application_counts,
+            "schedule_hold_status": schedule_hold_status,
+        },
+        db,
+        current_user,
     )
 
 
@@ -274,10 +338,8 @@ def apply_schedule(
     db.add(application)
     db.commit()
 
-    dt = schedule.event_datetime
-    month_param = f"{dt.year}-{dt.month:02d}"
     return RedirectResponse(
-        url=f"/?month={month_param}#home-extra-schedules",
+        url="/member/schedules/my/list",
         status_code=status.HTTP_303_SEE_OTHER,
     )
 
@@ -301,14 +363,7 @@ def cancel_schedule_application(
     if not application:
         raise HTTPException(status_code=404, detail="신청 내역이 없습니다.")
 
-    schedule_row = db.query(Schedule).filter(Schedule.id == schedule_id).first()
     application.status = "cancelled"
     db.commit()
 
-    if schedule_row:
-        dt = schedule_row.event_datetime
-        month_param = f"{dt.year}-{dt.month:02d}"
-        loc = f"/?month={month_param}#home-extra-schedules"
-    else:
-        loc = "/?#home-extra-schedules"
-    return RedirectResponse(url=loc, status_code=status.HTTP_303_SEE_OTHER)
+    return RedirectResponse(url="/member/schedules", status_code=status.HTTP_303_SEE_OTHER)
