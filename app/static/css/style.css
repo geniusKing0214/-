@@ -1733,6 +1733,26 @@ button.btn-google:hover {
     background: rgba(255, 255, 255, 0.5);
 }
 
+.sched-empty-pick-day {
+    max-width: 520px;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.sched-pick-day-lead {
+    margin: 0 0 10px;
+    font-size: 0.95rem;
+    color: var(--cute-text);
+    line-height: 1.55;
+}
+
+.sched-pick-day-hint {
+    margin: 0;
+    font-size: 0.85rem;
+    color: var(--cute-muted);
+    line-height: 1.45;
+}
+
 /* 메인 홈: 별도 모집(Schedule) 목록 */
 .sched-member-hub {
     margin-top: 32px;

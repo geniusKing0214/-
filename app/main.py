@@ -859,13 +859,7 @@ def _sched_home_view_context(
             )
         return out
 
-    if view == "member_personal":
-        all_detail_days = sorted(member_schedules_by_date.keys())
-    elif view == "member_events":
-        all_detail_days = sorted(by_date.keys())
-    else:
-        all_detail_days = sorted(set(by_date.keys()) | set(member_schedules_by_date.keys()))
-
+    # 달력에서 날짜(sel)를 고른 경우에만 해당 일 목록 표시 — 월 전체를 아래로 나열하지 않음
     if sel_day:
         detail_groups = [
             {
@@ -874,13 +868,7 @@ def _sched_home_view_context(
             }
         ]
     else:
-        detail_groups = [
-            {
-                "label": _day_label_ko(d),
-                "blocks": _merged_day_blocks(d),
-            }
-            for d in all_detail_days
-        ]
+        detail_groups = []
 
     has_detail_blocks = any(g["blocks"] for g in detail_groups)
 
@@ -895,8 +883,8 @@ def _sched_home_view_context(
         page_title = "스케줄"
         sched_detail_section_title = "내 일정"
         sched_hero_subtitle = (
-            "승인된 별도 일정만 달력에 표시됩니다. "
-            "일반 일정·슬롯 신청은 메뉴의 「일반 일정·슬롯 신청」에서 할 수 있어요."
+            "승인된 별도 일정만 달력에 표시됩니다. 날짜를 누르면 그날만 아래에 표시돼요. "
+            "일반 일정·슬롯은 메뉴의 「일반 일정·슬롯 신청」에서 할 수 있어요."
         )
         sched_calendar_base_path = "/"
         sched_home_show_event_blocks = False
@@ -905,7 +893,9 @@ def _sched_home_view_context(
     elif view == "member_events":
         page_title = "일반 일정·슬롯"
         sched_detail_section_title = "슬롯 신청"
-        sched_hero_subtitle = "이벤트·시간 슬롯을 신청할 수 있어요."
+        sched_hero_subtitle = (
+            "달력에서 날짜를 누르면 그날의 이벤트·슬롯만 아래에 표시됩니다."
+        )
         sched_calendar_base_path = "/member/slot-calendar"
         sched_home_show_event_blocks = True
         sched_home_show_member_blocks = False
@@ -913,7 +903,10 @@ def _sched_home_view_context(
     else:
         page_title = "스케줄"
         sched_detail_section_title = "슬롯 신청"
-        sched_hero_subtitle = "일정을 달력에서 고른 뒤 슬롯을 신청할 수 있어요."
+        sched_hero_subtitle = (
+            "달력에서 날짜를 누르면 그날의 일정·슬롯만 표시됩니다. "
+            "관리자는 이벤트와 승인된 별도 일정이 함께 보입니다."
+        )
         sched_calendar_base_path = "/"
         sched_home_show_event_blocks = True
         sched_home_show_member_blocks = True

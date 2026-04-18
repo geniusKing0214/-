@@ -53,15 +53,24 @@
 
         {% if sel_day %}
         <p class="sched-sel-banner">
-            <a href="{{ sched_calendar_base_path }}?month={{ month_param }}" class="sched-link-all">전체 {{ cal_month }}월 일정 보기</a>
-            <span class="sched-sel-text">선택: <strong>{{ sel_day.strftime("%Y-%m-%d") }}</strong></span>
+            <a href="{{ sched_calendar_base_path }}?month={{ month_param }}" class="sched-link-all">날짜 선택 해제</a>
+            <span class="sched-sel-text">선택한 날: <strong>{{ sel_day.strftime("%Y-%m-%d") }}</strong></span>
         </p>
         {% endif %}
     </section>
 
     <section class="sched-detail-section" aria-labelledby="sched-detail-h">
         <h2 id="sched-detail-h" class="sched-h2">{{ sched_detail_section_title }}</h2>
-        {% if has_detail_blocks %}
+        {% if not sel_day %}
+        <div class="sched-empty-dashed sched-empty-pick-day">
+            <p class="sched-pick-day-lead">달력에서 <strong>날짜</strong>를 누르면, 그날의 일정·슬롯만 여기에 표시됩니다.</p>
+            {% if has_month_events %}
+            <p class="sched-pick-day-hint">일정이 있는 날은 달력에 점으로 표시돼요.</p>
+            {% else %}
+            <p class="sched-pick-day-hint">{% if sched_home_personal_only %}이번 달에 승인된 별도 일정이 없어요.{% elif current_user.is_admin %}이번 달에 등록된 일정이 없어요. 메뉴의 <strong>스케줄 생성</strong>에서 추가할 수 있어요.{% else %}이번 달에 등록된 일정이 없어요.{% endif %}</p>
+            {% endif %}
+        </div>
+        {% elif has_detail_blocks %}
         {% for g in detail_groups %}
         {% if g.blocks %}
         <h3 class="sched-day-label">{{ g.label }}</h3>
@@ -131,17 +140,9 @@
         {% else %}
         <div class="sched-empty-dashed">
             {% if sched_home_personal_only %}
-                {% if has_month_events %}
-                이 날짜에 승인된 별도 일정이 없어요. 다른 날을 눌러 보세요.
-                {% else %}
-                이번 달에 승인된 별도 일정이 없어요.
-                {% endif %}
+            이 날짜에 승인된 별도 일정이 없어요. 다른 날을 눌러 보세요.
             {% else %}
-                {% if has_month_events %}
-                이 날짜에 등록된 일정이 없어요. 다른 날을 눌러 보세요.
-                {% else %}
-                이번 달에 등록된 일정이 없어요.{% if current_user.is_admin %} 메뉴의 <strong>스케줄 생성</strong>에서 일정을 등록해 보세요.{% endif %}
-                {% endif %}
+            이 날짜에 등록된 일정이 없어요. 다른 날을 눌러 보세요.
             {% endif %}
         </div>
         {% endif %}
