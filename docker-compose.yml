@@ -8,9 +8,8 @@ services:
       SESSION_SECRET_KEY: ${SESSION_SECRET_KEY:-change-me-in-production}
       # 로컬 HTTP: false. HTTPS 리버스 프록시 뒤: true
       SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE:-false}
+    # 프로젝트 폴더 ./data 에 DB 파일이 생깁니다(백업·이전 PC 복사에 유리).
+    # docker compose down -v 는 쓰지 마세요(이름 있는 볼륨 삭제 시에만 해당).
     volumes:
-      - scheduler_data:/data
+      - ./data:/data
     restart: unless-stopped
-
-volumes:
-  scheduler_data:

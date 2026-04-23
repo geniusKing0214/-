@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/css/style.css?v=20260426">
+    <link rel="stylesheet" href="/static/css/style.css?v=20260429">
 </head>
 <body>
     <div class="nav-mobile-backdrop" id="navMobileBackdrop" hidden aria-hidden="true"></div>
@@ -21,6 +21,14 @@
                 <div class="topbar-end">
                     {% if current_user %}
                     <span class="nav-user nav-user-compact nav-user-topbar">{{ display_name(current_user) }}님</span>
+                    {% if user_is_admin(current_user) %}
+                    <nav class="topbar-admin-quick" aria-label="관리자 바로가기">
+                        <a href="/admin/events/new">생성</a>
+                        <a href="/admin/events">이벤트</a>
+                        <a href="/admin/members">회원</a>
+                        <a href="/admin/operations">운영</a>
+                    </nav>
+                    {% endif %}
                     {% endif %}
                     <button
                         type="button"
@@ -51,13 +59,12 @@
                 {% if current_user %}
                 <li><a href="/">홈 · 일정</a></li>
                 <li><a href="/member/schedules" class="nav-link-extra-sched">내 승인 별도 일정</a></li>
-                <li><a href="/member/schedules/open">모집 중 별도 신청</a></li>
-                {% if not current_user.is_admin %}
+                {% if not user_is_admin(current_user) %}
                 <li><a href="/member/slot-calendar">일반 일정·슬롯 신청</a></li>
                 {% endif %}
                 <li><a href="/profile">프로필 · 닉네임</a></li>
                 <li><a href="/my-applications">내 신청</a></li>
-                {% if current_user.is_admin %}
+                {% if user_is_admin(current_user) %}
                 <li class="nav-list-heading"><span>관리자</span></li>
                 <li><a href="/admin/events/new">스케줄 생성</a></li>
                 <li><a href="/admin/events">이벤트 관리</a></li>

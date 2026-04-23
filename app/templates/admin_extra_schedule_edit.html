@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="page-wrap sched-page sched-create-page">
+    <div class="page-header">
+        <h1>별도 일정 수정 <span class="sched-admin-badge">관리자</span></h1>
+        <div class="admin-schedule-header-actions">
+            <a href="/admin/extra-schedules" class="btn btn-outline btn-sm">목록</a>
+            <a href="/admin/operations" class="btn btn-outline btn-sm">운영</a>
+        </div>
+    </div>
+
+    {% if edit_error %}
+    <p class="form-error-banner" role="alert">{{ edit_error }}</p>
+    {% endif %}
+
+    <section class="sched-admin-card card" aria-labelledby="extra-edit-h">
+        <h2 id="extra-edit-h" class="visually-hidden">일정 내용</h2>
+        <form method="post" action="/admin/extra-schedules/{{ schedule.id }}/edit" class="sched-create-form">
+            <div class="sched-form-grid">
+                <div class="sched-field">
+                    <label for="es_date">일시 · 날짜</label>
+                    <input type="date" id="es_date" name="event_date" required value="{{ schedule.event_datetime.strftime('%Y-%m-%d') }}">
+                </div>
+                <div class="sched-field">
+                    <label for="es_time">일시 · 시각</label>
+                    <input type="time" id="es_time" name="event_time" required value="{{ schedule.event_datetime.strftime('%H:%M') }}">
+                </div>
+                <div class="sched-field sched-field-span2">
+                    <label for="es_title">제목</label>
+                    <input type="text" id="es_title" name="title" required maxlength="200" value="{{ schedule.title }}">
+                </div>
+                <div class="sched-field sched-field-span2">
+                    <label for="es_location">장소</label>
+                    <input type="text" id="es_location" name="location" maxlength="200" value="{{ schedule.location or '' }}">
+                </div>
+                <div class="sched-field sched-field-full">
+                    <label for="es_desc">설명</label>
+                    <textarea id="es_desc" name="description" rows="4" maxlength="8000">{{ schedule.description or '' }}</textarea>
+                </div>
+                <div class="sched-field">
+                    <label for="es_limit">모집 정원 (0 = 무제한)</label>
+                    <input type="number" id="es_limit" name="recruit_limit" min="0" value="{{ schedule.recruit_limit }}">
+                </div>
+                <div class="sched-field">
+                    <label for="es_status">모집 상태</label>
+                    <select id="es_status" name="status">
+                        <option value="open" {% if schedule.status == "open" %}selected{% endif %}>모집중</option>
+                        <option value="closed" {% if schedule.status != "open" %}selected{% endif %}>마감</option>
+                    </select>
+                </div>
+            </div>
+            <button type="submit" class="btn btn-primary full sched-submit">저장</button>
+        </form>
+    </section>
+</div>
+{% endblock %}

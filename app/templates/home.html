@@ -17,39 +17,7 @@
             </div>
         </div>
 
-        <div class="sched-cal-wrap">
-            <div class="sched-cal-weekdays">
-                {% for w in weekday_headers %}
-                <div class="sched-cal-wd">{{ w }}</div>
-                {% endfor %}
-            </div>
-            <div class="sched-cal-grid">
-                {% for week in cal_weeks %}
-                {% for cell in week %}
-                {% if cell.in_month %}
-                <a
-                    href="{{ sched_calendar_base_path }}?month={{ month_param }}&sel={{ cell.date.isoformat() }}"
-                    class="sched-cal-cell {% if cell.is_today %}is-today{% endif %} {% if sel_day and cell.date == sel_day %}is-selected{% endif %}"
-                >
-                    <span class="sched-cal-num">{{ cell.date.day }}</span>
-                    {% if cell.calendar_marker_count > 0 %}
-                    {% set dot_n = cell.calendar_marker_count %}
-                    <span class="sched-cal-dots" aria-hidden="true">
-                        {% for _ in range(dot_n) %}
-                        <span class="sched-dot"></span>
-                        {% endfor %}
-                    </span>
-                    {% endif %}
-                </a>
-                {% else %}
-                <div class="sched-cal-cell is-other-month" aria-hidden="true">
-                    <span class="sched-cal-num">{{ cell.date.day }}</span>
-                </div>
-                {% endif %}
-                {% endfor %}
-                {% endfor %}
-            </div>
-        </div>
+        {% include 'partials/sched_calendar.html' %}
 
         {% if sel_day %}
         <p class="sched-sel-banner">
@@ -67,7 +35,7 @@
             {% if has_month_events %}
             <p class="sched-pick-day-hint">일정이 있는 날은 달력에 점으로 표시돼요.</p>
             {% else %}
-            <p class="sched-pick-day-hint">{% if sched_home_personal_only %}이번 달에 승인된 별도 일정이 없어요.{% elif current_user.is_admin %}이번 달에 등록된 일정이 없어요. 메뉴의 <strong>스케줄 생성</strong>에서 추가할 수 있어요.{% else %}이번 달에 등록된 일정이 없어요.{% endif %}</p>
+            <p class="sched-pick-day-hint">{% if sched_home_personal_only %}이번 달에 승인된 별도 일정이 없어요.{% elif user_is_admin(current_user) %}이번 달에 등록된 일정이 없어요. 메뉴의 <strong>스케줄 생성</strong>에서 추가할 수 있어요.{% else %}이번 달에 등록된 일정이 없어요.{% endif %}</p>
             {% endif %}
         </div>
         {% elif has_detail_blocks %}

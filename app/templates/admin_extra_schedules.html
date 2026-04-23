@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="page-wrap admin-schedule-page sched-page">
+    <div class="page-header admin-schedule-header">
+        <h1>승인 별도 일정 수정</h1>
+        <div class="admin-schedule-header-actions">
+            <a href="/admin/operations" class="btn btn-outline btn-sm">운영</a>
+            <a href="/admin/events" class="btn btn-outline btn-sm">이벤트 관리</a>
+            <a href="/" class="btn btn-outline btn-sm">홈으로</a>
+        </div>
+    </div>
+    <p class="form-hint" style="margin-top:0">회원에게 <strong>승인된</strong> 별도 일정만 표시됩니다. 일시·장소 등을 바꾸면 회원 달력에도 반영됩니다.</p>
+
+    {% if schedules and schedules|length > 0 %}
+    <ul class="app-row-list admin-extra-sched-list">
+        {% for s in schedules %}
+        <li class="app-row-compact admin-event-row admin-extra-sched-row">
+            <span class="app-row-title" title="{{ s.title }}">{{ s.title }}</span>
+            <span class="app-row-datetime">{{ s.event_datetime.strftime("%Y-%m-%d %H:%M") }}</span>
+            <span class="app-row-stats">승인 {{ approved_counts.get(s.id, 0) }}명</span>
+            <span class="app-row-badge">
+                {% if s.status == "open" %}
+                <span class="badge success">모집중</span>
+                {% else %}
+                <span class="badge">마감</span>
+                {% endif %}
+            </span>
+            <span class="admin-event-actions">
+                <a href="/admin/extra-schedules/{{ s.id }}/edit" class="btn btn-primary btn-sm">수정</a>
+            </span>
+        </li>
+        {% endfor %}
+    </ul>
+    {% else %}
+    <div class="empty-box">승인된 신청이 있는 별도 일정이 없습니다.</div>
+    {% endif %}
+</div>
+{% endblock %}

@@ -17,7 +17,6 @@
                     {% if group_mode == 'week' %}aria-current="page"{% endif %}
                 >주별</a>
             </div>
-            <a href="/member/schedules/open" class="btn btn-outline btn-sm">별도 모집 신청</a>
         </div>
     </div>
 
@@ -26,7 +25,7 @@
     <section class="app-group" aria-labelledby="ms-heading-{{ loop.index }}">
         <h2 class="app-group-title" id="ms-heading-{{ loop.index }}">{{ g.label }}</h2>
         <ul class="app-row-list">
-            {% for app in g.items %}
+            {% for app in g['items'] %}
             <li class="app-row-compact">
                 <span class="app-row-title" title="{{ app.schedule.title }}">{{ app.schedule.title }}</span>
                 <span class="app-row-datetime">

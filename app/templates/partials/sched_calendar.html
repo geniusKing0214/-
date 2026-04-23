@@ -1,0 +1,43 @@
+{# 공통: 일정 달력 (cal_weeks, month 네비, sel) #}
+<div class="sched-cal-wrap {{ sched_cal_wrap_class|default('', true) }}">
+    <div class="sched-cal-weekdays">
+        {% for w in weekday_headers %}
+        <div class="sched-cal-wd">{{ w }}</div>
+        {% endfor %}
+    </div>
+    <div class="sched-cal-grid">
+        {% for week in cal_weeks %}
+        {% for cell in week %}
+        {% if cell.in_month %}
+        <a
+            href="{{ sched_calendar_base_path }}?month={{ month_param }}&sel={{ cell.date.isoformat() }}"
+            class="sched-cal-cell {% if cell.is_today %}is-today{% endif %} {% if sel_day and cell.date == sel_day %}is-selected{% endif %}"
+        >
+            <span class="sched-cal-num">{{ cell.date.day }}</span>
+            {% if sched_show_member_cal_chips|default(false) and cell.member_cell_chips and cell.member_cell_chips|length > 0 %}
+            <div class="sched-cal-cell-ms" aria-hidden="true">
+                {% for chip in cell.member_cell_chips %}
+                <span class="sched-cal-ms-line" title="{{ chip.time }} {{ chip.title }}">{{ chip.time }} {{ chip.title }}</span>
+                {% endfor %}
+                {% if cell.member_cell_more > 0 %}
+                <span class="sched-cal-ms-more">+{{ cell.member_cell_more }}</span>
+                {% endif %}
+            </div>
+            {% elif not sched_show_member_cal_chips|default(false) and cell.calendar_marker_count > 0 %}
+            {% set dot_n = cell.calendar_marker_count %}
+            <span class="sched-cal-dots" aria-hidden="true">
+                {% for _ in range(dot_n) %}
+                <span class="sched-dot"></span>
+                {% endfor %}
+            </span>
+            {% endif %}
+        </a>
+        {% else %}
+        <div class="sched-cal-cell is-other-month" aria-hidden="true">
+            <span class="sched-cal-num">{{ cell.date.day }}</span>
+        </div>
+        {% endif %}
+        {% endfor %}
+        {% endfor %}
+    </div>
+</div>

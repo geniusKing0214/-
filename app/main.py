@@ -23,6 +23,7 @@ from app.database import (
     ensure_events_location_column,
     ensure_schedule_application_status_migration,
     ensure_sqlite_migrations,
+    ensure_users_is_admin_coercion,
 )
 from app.firebase_init import (
     firebase_google_login_ready,
@@ -38,6 +39,7 @@ from app.models import (
     Schedule,
     ScheduleApplication,
 )
+from app.cal_grid import build_cal_weeks, schedule_calendar_date
 from app.password_utils import hash_password, verify_password
 from app.routes.member_schedule import router as member_schedule_router
 from app.template_globals import attach_template_globals, display_name as user_display_name
@@ -135,6 +137,7 @@ async def _http_exception_browser_redirect(request: Request, exc: HTTPException)
 
 Base.metadata.create_all(bind=engine)
 ensure_sqlite_migrations(engine)
+ensure_users_is_admin_coercion(engine)
 ensure_events_location_column(engine)
 ensure_schedule_application_status_migration(engine)
 
@@ -501,6 +504,19 @@ def _event_application_counts(
     return out
 
 
+def _slot_active_hold_counts_for_event(db: Session, event_id: int) -> dict[int, int]:
+    """이벤트 내 슬롯별 pending+approved 신청 수(삭제·정원 축소 시 사용)."""
+    statuses = tuple(_active_application_statuses())
+    rows = (
+        db.query(Application.slot_id, func.count(Application.id))
+        .join(EventSlot, EventSlot.id == Application.slot_id)
+        .filter(EventSlot.event_id == event_id, Application.status.in_(statuses))
+        .group_by(Application.slot_id)
+        .all()
+    )
+    return {int(sid): int(n) for sid, n in rows}
+
+
 def admin_required(request: Request, db: Session) -> User:
     user = get_current_user(request, db)
     if not user or not user.is_admin:
@@ -785,41 +801,24 @@ def _sched_home_view_context(
             .join(ScheduleApplication, ScheduleApplication.schedule_id == Schedule.id)
             .filter(
                 ScheduleApplication.user_id == current_user.id,
-                ScheduleApplication.status == "approved",
+                ScheduleApplication.status.in_(("approved", "applied")),
             )
             .order_by(Schedule.event_datetime.asc())
             .all()
         )
         member_schedules_by_date = {}
         for s in approved_member_schedules:
-            sd = s.event_datetime.date()
+            sd = schedule_calendar_date(s)
             if first <= sd <= last:
                 member_schedules_by_date.setdefault(sd, []).append(s)
 
-    cal = calendar_mod.Calendar(firstweekday=0)
-    cal_weeks: list[list[dict[str, Any]]] = []
-    for week in cal.monthdatescalendar(y, m):
-        row: list[dict[str, Any]] = []
-        for d in week:
-            n_ev = len(by_date.get(d, []))
-            n_ms = len(member_schedules_by_date.get(d, []))
-            if view == "member_personal":
-                marker = min(n_ms, 3)
-            elif view == "member_events":
-                marker = min(n_ev, 3)
-            else:
-                marker = min(n_ev + n_ms, 3)
-            row.append(
-                {
-                    "date": d,
-                    "in_month": d.month == m,
-                    "is_today": d == date.today(),
-                    "event_count": n_ev,
-                    "member_approved_schedule_count": n_ms,
-                    "calendar_marker_count": marker,
-                }
-            )
-        cal_weeks.append(row)
+    cal_weeks = build_cal_weeks(
+        y,
+        m,
+        view=view,
+        by_date=by_date,
+        member_schedules_by_date=member_schedules_by_date,
+    )
 
     sel_day = _parse_sel_day(sel)
     if sel_day and (sel_day.year, sel_day.month) != (y, m):
@@ -890,6 +889,7 @@ def _sched_home_view_context(
         sched_home_show_event_blocks = False
         sched_home_show_member_blocks = True
         sched_home_personal_only = True
+        sched_show_member_cal_chips = True
     elif view == "member_events":
         page_title = "일반 일정·슬롯"
         sched_detail_section_title = "슬롯 신청"
@@ -900,6 +900,7 @@ def _sched_home_view_context(
         sched_home_show_event_blocks = True
         sched_home_show_member_blocks = False
         sched_home_personal_only = False
+        sched_show_member_cal_chips = False
     else:
         page_title = "스케줄"
         sched_detail_section_title = "슬롯 신청"
@@ -911,6 +912,11 @@ def _sched_home_view_context(
         sched_home_show_event_blocks = True
         sched_home_show_member_blocks = True
         sched_home_personal_only = False
+        sched_show_member_cal_chips = False
+
+    sched_cal_wrap_class = (
+        "sched-cal-wrap--member-chips" if sched_show_member_cal_chips else ""
+    )
 
     return {
         "page_title": page_title,
@@ -931,6 +937,8 @@ def _sched_home_view_context(
         "sched_home_show_event_blocks": sched_home_show_event_blocks,
         "sched_home_show_member_blocks": sched_home_show_member_blocks,
         "sched_home_personal_only": sched_home_personal_only,
+        "sched_show_member_cal_chips": sched_show_member_cal_chips,
+        "sched_cal_wrap_class": sched_cal_wrap_class,
     }
 
 
@@ -1235,16 +1243,322 @@ def admin_event_edit(
     if not event:
         return redirect("/admin/events")
 
+    slot_hold_counts = _slot_active_hold_counts_for_event(db, event_id)
+
     return render(
         request,
         "admin_event_edit.html",
         {
             "page_title": "이벤트",
             "event": event,
+            "slot_hold_counts": slot_hold_counts,
+            "edit_error": None,
         },
         db,
         current_user=admin,
     )
+
+
+@app.post("/admin/events/{event_id}/edit")
+def admin_event_edit_save(
+    event_id: int,
+    request: Request,
+    title: str = Form(""),
+    event_date: str = Form(""),
+    location: str = Form(""),
+    description: str = Form(""),
+    slot_ids: list[str] = Form(...),
+    slot_times: list[str] = Form(...),
+    slot_capacities: list[str] = Form(...),
+    db: Session = Depends(get_db),
+):
+    try:
+        admin = admin_required(request, db)
+    except PermissionError:
+        return redirect("/login")
+
+    event = (
+        db.query(Event)
+        .options(joinedload(Event.slots))
+        .filter(Event.id == event_id)
+        .first()
+    )
+    if not event:
+        return redirect("/admin/events")
+
+    slot_hold_counts = _slot_active_hold_counts_for_event(db, event_id)
+
+    def _rerender(err: str) -> HTMLResponse:
+        db.refresh(event)
+        return render(
+            request,
+            "admin_event_edit.html",
+            {
+                "page_title": "이벤트",
+                "event": event,
+                "slot_hold_counts": slot_hold_counts,
+                "edit_error": err,
+            },
+            db,
+            current_user=admin,
+        )
+
+    t = title.strip()
+    if not t:
+        return _rerender("이벤트명을 입력해 주세요.")
+
+    try:
+        ev_date = datetime.strptime(event_date.strip(), "%Y-%m-%d").date()
+    except ValueError:
+        return _rerender("날짜 형식이 올바르지 않습니다.")
+
+    rows: list[tuple[Optional[int], Any, int]] = []
+    n = max(len(slot_ids), len(slot_times), len(slot_capacities))
+    for i in range(n):
+        sid_raw = (slot_ids[i] if i < len(slot_ids) else "").strip()
+        time_raw = (slot_times[i] if i < len(slot_times) else "").strip()
+        cap_raw = (slot_capacities[i] if i < len(slot_capacities) else "").strip()
+        if not time_raw and not sid_raw:
+            continue
+        if not time_raw:
+            return _rerender("모든 슬롯에 시작 시간을 입력해 주세요.")
+        try:
+            t_slot = datetime.strptime(time_raw, "%H:%M").time()
+        except ValueError:
+            return _rerender("슬롯 시간 형식이 올바르지 않습니다.")
+        try:
+            cap = max(1, int(cap_raw or "1"))
+        except ValueError:
+            return _rerender("정원은 숫자로 입력해 주세요.")
+        sid: Optional[int] = None
+        if sid_raw.isdigit():
+            sid = int(sid_raw)
+        rows.append((sid, t_slot, cap))
+
+    if not rows:
+        return _rerender("최소 1개의 시간 슬롯이 필요합니다.")
+
+    existing_by_id = {s.id: s for s in event.slots}
+    submitted_ids = {sid for sid, _, _ in rows if sid is not None}
+    initial_ids = {s.id for s in event.slots}
+
+    for sid, t_slot, cap in rows:
+        if sid is not None:
+            if sid not in existing_by_id:
+                return _rerender("잘못된 슬롯 정보입니다.")
+            holds = slot_hold_counts.get(sid, 0)
+            if cap < holds:
+                return _rerender(
+                    f"정원은 신청 중·승인 인원({holds}명) 이상이어야 합니다."
+                )
+
+    for slot_id in initial_ids:
+        if slot_id not in submitted_ids and slot_hold_counts.get(slot_id, 0) > 0:
+            return _rerender(
+                "신청이 있는 슬롯은 목록에서 제거하거나 삭제할 수 없습니다."
+            )
+
+    event.title = t[:200]
+    event.event_date = ev_date
+    loc = location.strip()
+    event.location = loc if loc else None
+    event.description = (description or "").strip() if description else ""
+
+    for sid, t_slot, cap in rows:
+        if sid is not None:
+            sl = existing_by_id[sid]
+            sl.start_time = t_slot
+            sl.capacity = cap
+
+    for slot_id in list(initial_ids):
+        if slot_id not in submitted_ids:
+            db.delete(existing_by_id[slot_id])
+
+    for sid, t_slot, cap in rows:
+        if sid is None:
+            db.add(
+                EventSlot(
+                    event_id=event.id,
+                    start_time=t_slot,
+                    capacity=cap,
+                    is_active=True,
+                )
+            )
+
+    try:
+        db.commit()
+    except Exception:
+        logger.exception("admin_event_edit_save commit failed")
+        db.rollback()
+        return _rerender("저장 중 오류가 났습니다. 다시 시도해 주세요.")
+
+    return redirect(f"/admin/events/{event_id}/edit")
+
+
+def _schedule_ids_with_approved_applications(db: Session) -> list[int]:
+    rows = (
+        db.query(ScheduleApplication.schedule_id)
+        .filter(ScheduleApplication.status.in_(("approved", "applied")))
+        .distinct()
+        .all()
+    )
+    return [int(r[0]) for r in rows]
+
+
+def _schedule_has_approved_application(db: Session, schedule_id: int) -> bool:
+    return (
+        db.query(ScheduleApplication.id)
+        .filter(
+            ScheduleApplication.schedule_id == schedule_id,
+            ScheduleApplication.status.in_(("approved", "applied")),
+        )
+        .limit(1)
+        .first()
+        is not None
+    )
+
+
+def _approved_member_counts_by_schedule(
+    db: Session, schedule_ids: list[int]
+) -> dict[int, int]:
+    if not schedule_ids:
+        return {}
+    out: dict[int, int] = {}
+    for sid, cnt in (
+        db.query(ScheduleApplication.schedule_id, func.count(ScheduleApplication.id))
+        .filter(
+            ScheduleApplication.schedule_id.in_(schedule_ids),
+            ScheduleApplication.status.in_(("approved", "applied")),
+        )
+        .group_by(ScheduleApplication.schedule_id)
+        .all()
+    ):
+        out[int(sid)] = int(cnt)
+    return out
+
+
+@app.get("/admin/extra-schedules", response_class=HTMLResponse)
+def admin_extra_schedules_list(request: Request, db: Session = Depends(get_db)):
+    try:
+        admin = admin_required(request, db)
+    except PermissionError:
+        return redirect("/login")
+
+    ids = _schedule_ids_with_approved_applications(db)
+    schedules = (
+        db.query(Schedule)
+        .filter(Schedule.id.in_(ids))
+        .order_by(Schedule.event_datetime.desc())
+        .all()
+        if ids
+        else []
+    )
+    approved_counts = _approved_member_counts_by_schedule(db, ids)
+
+    return render(
+        request,
+        "admin_extra_schedules.html",
+        {
+            "page_title": "승인 별도 일정 수정",
+            "schedules": schedules,
+            "approved_counts": approved_counts,
+        },
+        db,
+        current_user=admin,
+    )
+
+
+@app.get("/admin/extra-schedules/{schedule_id}/edit", response_class=HTMLResponse)
+def admin_extra_schedule_edit_page(
+    request: Request, schedule_id: int, db: Session = Depends(get_db)
+):
+    try:
+        admin = admin_required(request, db)
+    except PermissionError:
+        return redirect("/login")
+
+    schedule = db.query(Schedule).filter(Schedule.id == schedule_id).first()
+    if not schedule or not _schedule_has_approved_application(db, schedule_id):
+        return redirect("/admin/extra-schedules")
+
+    return render(
+        request,
+        "admin_extra_schedule_edit.html",
+        {
+            "page_title": "별도 일정 수정",
+            "schedule": schedule,
+            "edit_error": None,
+        },
+        db,
+        current_user=admin,
+    )
+
+
+@app.post("/admin/extra-schedules/{schedule_id}/edit")
+def admin_extra_schedule_edit_save(
+    schedule_id: int,
+    request: Request,
+    title: str = Form(""),
+    description: str = Form(""),
+    location: str = Form(""),
+    event_date: str = Form(""),
+    event_time: str = Form(""),
+    recruit_limit: str = Form("0"),
+    status: str = Form("open"),
+    db: Session = Depends(get_db),
+):
+    try:
+        admin = admin_required(request, db)
+    except PermissionError:
+        return redirect("/login")
+
+    schedule = db.query(Schedule).filter(Schedule.id == schedule_id).first()
+    if not schedule or not _schedule_has_approved_application(db, schedule_id):
+        return redirect("/admin/extra-schedules")
+
+    def _rerender(err: str) -> HTMLResponse:
+        return render(
+            request,
+            "admin_extra_schedule_edit.html",
+            {
+                "page_title": "별도 일정 수정",
+                "schedule": schedule,
+                "edit_error": err,
+            },
+            db,
+            current_user=admin,
+        )
+
+    t = title.strip()
+    if not t:
+        return _rerender("제목을 입력해 주세요.")
+
+    try:
+        ev_dt = datetime.strptime(
+            f"{event_date.strip()} {event_time.strip()}",
+            "%Y-%m-%d %H:%M",
+        )
+    except ValueError:
+        return _rerender("날짜·시각 형식이 올바르지 않습니다.")
+
+    try:
+        lim = max(0, int(str(recruit_limit).strip() or "0"))
+    except ValueError:
+        lim = 0
+
+    st = (status or "open").strip().lower()
+    if st not in ("open", "closed"):
+        st = "open"
+
+    schedule.title = t[:200]
+    schedule.description = (description or "").strip() or None
+    schedule.location = (location or "").strip() or None
+    schedule.event_datetime = ev_dt
+    schedule.recruit_limit = lim
+    schedule.status = st
+
+    db.commit()
+    return redirect(f"/admin/extra-schedules/{schedule_id}/edit")
 
 
 @app.get("/admin/members", response_class=HTMLResponse)
@@ -1409,51 +1723,24 @@ def admin_operations(request: Request, db: Session = Depends(get_db)):
         .all()
     )
 
-    notifications = (
-        db.query(Notification)
-        .filter(Notification.user_id == admin.id)
-        .order_by(Notification.created_at.desc())
-        .all()
-    )
-
     pending_count = sum(1 for item in applications if item.status == "pending")
     approved_count = sum(1 for item in applications if item.status == "approved")
     rejected_count = sum(1 for item in applications if item.status == "rejected")
-
-    member_schedule_applications_pending = (
-        db.query(ScheduleApplication)
-        .options(
-            joinedload(ScheduleApplication.user),
-            joinedload(ScheduleApplication.schedule),
-        )
-        .filter(ScheduleApplication.status == "pending")
-        .order_by(ScheduleApplication.applied_at.desc())
-        .all()
-    )
-
-    (
-        db.query(Notification)
-        .filter(Notification.user_id == admin.id, Notification.is_read == False)
-        .update({"is_read": True}, synchronize_session=False)
-    )
-    db.commit()
 
     return render(
         request,
         "admin_operations.html",
         {
-            "page_title": "운영 · 회원가입 승인",
+            "page_title": "운영 · 신청 처리",
             "applications": applications,
             "slot_applications_pending": slot_applications_pending,
             "slot_applications_approved": slot_applications_approved,
             "slot_applications_rejected": slot_applications_rejected,
             "slot_applications_other": slot_applications_other,
             "pending_users": pending_users,
-            "notifications": notifications,
             "pending_count": pending_count,
             "approved_count": approved_count,
             "rejected_count": rejected_count,
-            "member_schedule_applications_pending": member_schedule_applications_pending,
         },
         db,
         current_user=admin,
@@ -1517,6 +1804,99 @@ def admin_applications_redirect():
     return redirect("/admin/operations")
 
 
+def _try_set_application_status(
+    db: Session,
+    admin: User,
+    application: Application,
+    new_status: str,
+) -> Optional[str]:
+    """이벤트 슬롯 신청 상태 변경. 성공 시 None, 실패 시 관리자에게 보여줄 오류 문구."""
+    new_status = (new_status or "").strip().lower()
+    if new_status not in ("pending", "approved", "rejected"):
+        return "처리할 수 없는 상태입니다."
+    if application.status == new_status:
+        return None
+
+    if new_status == "approved":
+        approved_others = (
+            db.query(Application)
+            .filter(
+                Application.slot_id == application.slot_id,
+                Application.status == "approved",
+                Application.id != application.id,
+            )
+            .count()
+        )
+        if approved_others >= application.slot.capacity:
+            return (
+                f"'{application.event.title}' "
+                f"{application.slot.start_time.strftime('%H:%M')} 슬롯은 정원이 찼습니다."
+            )
+
+    application.status = new_status
+    if new_status == "pending":
+        application.reviewed_at = None
+        application.reviewed_by = None
+    else:
+        application.reviewed_at = datetime.utcnow()
+        application.reviewed_by = admin.id
+
+    title = application.event.title
+    hm = application.slot.start_time.strftime("%H:%M")
+    if new_status == "approved":
+        user_msg = f"'{title}' {hm} 신청이 승인되었습니다."
+    elif new_status == "rejected":
+        user_msg = f"'{title}' {hm} 신청이 거절되었습니다."
+    else:
+        user_msg = f"'{title}' {hm} 신청이 검토 대기(보류)로 되돌아갔습니다."
+    db.add(
+        Notification(
+            user_id=application.user_id,
+            message=user_msg,
+            is_read=False,
+        )
+    )
+    return None
+
+
+def _get_slot_application_for_admin(
+    db: Session, application_id: int
+) -> Optional[Application]:
+    return (
+        db.query(Application)
+        .options(
+            joinedload(Application.user),
+            joinedload(Application.event),
+            joinedload(Application.slot),
+        )
+        .filter(Application.id == application_id)
+        .first()
+    )
+
+
+@app.post("/admin/applications/{application_id}/status")
+def set_application_status(
+    application_id: int,
+    request: Request,
+    status: str = Form(...),
+    db: Session = Depends(get_db),
+):
+    try:
+        admin = admin_required(request, db)
+    except PermissionError:
+        return redirect("/login")
+
+    application = _get_slot_application_for_admin(db, application_id)
+    if not application:
+        return redirect("/admin/operations")
+
+    err = _try_set_application_status(db, admin, application, status)
+    if err:
+        db.add(Notification(user_id=admin.id, message=err, is_read=False))
+    db.commit()
+    return redirect("/admin/operations")
+
+
 @app.post("/admin/applications/{application_id}/approve")
 def approve_application(
     application_id: int,
@@ -1528,51 +1908,13 @@ def approve_application(
     except PermissionError:
         return redirect("/login")
 
-    application = (
-        db.query(Application)
-        .options(
-            joinedload(Application.user),
-            joinedload(Application.event),
-            joinedload(Application.slot),
-        )
-        .filter(Application.id == application_id)
-        .first()
-    )
+    application = _get_slot_application_for_admin(db, application_id)
     if not application:
         return redirect("/admin/operations")
 
-    approved_count = (
-        db.query(Application)
-        .filter(
-            Application.slot_id == application.slot_id,
-            Application.status == "approved",
-            Application.id != application.id,
-        )
-        .count()
-    )
-
-    if approved_count >= application.slot.capacity:
-        db.add(
-            Notification(
-                user_id=admin.id,
-                message=f"'{application.event.title}' {application.slot.start_time.strftime('%H:%M')} 슬롯은 이미 마감되어 승인할 수 없습니다.",
-                is_read=False,
-            )
-        )
-        db.commit()
-        return redirect("/admin/operations")
-
-    application.status = "approved"
-    application.reviewed_at = datetime.utcnow()
-    application.reviewed_by = admin.id
-
-    db.add(
-        Notification(
-            user_id=application.user_id,
-            message=f"'{application.event.title}' {application.slot.start_time.strftime('%H:%M')} 신청이 승인되었습니다.",
-            is_read=False,
-        )
-    )
+    err = _try_set_application_status(db, admin, application, "approved")
+    if err:
+        db.add(Notification(user_id=admin.id, message=err, is_read=False))
     db.commit()
     return redirect("/admin/operations")
 
@@ -1588,30 +1930,13 @@ def reject_application(
     except PermissionError:
         return redirect("/login")
 
-    application = (
-        db.query(Application)
-        .options(
-            joinedload(Application.user),
-            joinedload(Application.event),
-            joinedload(Application.slot),
-        )
-        .filter(Application.id == application_id)
-        .first()
-    )
+    application = _get_slot_application_for_admin(db, application_id)
     if not application:
         return redirect("/admin/operations")
 
-    application.status = "rejected"
-    application.reviewed_at = datetime.utcnow()
-    application.reviewed_by = admin.id
-
-    db.add(
-        Notification(
-            user_id=application.user_id,
-            message=f"'{application.event.title}' {application.slot.start_time.strftime('%H:%M')} 신청이 거절되었습니다.",
-            is_read=False,
-        )
-    )
+    err = _try_set_application_status(db, admin, application, "rejected")
+    if err:
+        db.add(Notification(user_id=admin.id, message=err, is_read=False))
     db.commit()
     return redirect("/admin/operations")
 

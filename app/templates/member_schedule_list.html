@@ -1,37 +1,64 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="page-wrap compact-calendar">
+<div class="page-wrap compact-calendar member-approved-sched-page">
     <div class="page-header">
         <h1>내 승인 별도 일정</h1>
         <div class="sched-member-head-actions">
-            <a href="/member/schedules/open" class="btn btn-outline btn-sm">모집 중 일정 신청</a>
             <a href="/member/schedules/my/list" class="btn btn-outline btn-sm">내 신청 내역</a>
         </div>
     </div>
-    <p class="form-hint" style="margin-top:0">관리자 승인이 완료된 별도 일정만 표시됩니다. 신청·대기 중인 건은 <strong>내 신청 내역</strong>에서 확인할 수 있어요.</p>
+    <p class="form-hint" style="margin-top:0">승인된 일정은 <strong>달력 칸</strong>에 시간·제목으로 표시됩니다. 날짜를 누르면 아래에 상세가 열려요.</p>
 
-    <div class="card-list">
-        {% for schedule in schedules %}
-        <div class="card">
-            <div class="card-body">
-                <h2>{{ schedule.title }}</h2>
-                <p class="text-muted">{{ schedule.description or "설명 없음" }}</p>
-
-                <div class="info-row"><strong>장소:</strong> {{ schedule.location or "-" }}</div>
-                <div class="info-row"><strong>일시:</strong> {{ schedule.event_datetime.strftime("%Y-%m-%d %H:%M") }}</div>
-
-                <div class="card-actions">
-                    <span class="badge success">승인됨</span>
-                    <a href="/member/schedules/{{ schedule.id }}" class="btn btn-outline btn-sm">상세·취소</a>
-                </div>
+    <section class="sched-calendar-section" aria-labelledby="ms-cal-h">
+        <div class="sched-cal-toolbar">
+            <h2 id="ms-cal-h" class="sched-h2 sched-h2-inline">달력</h2>
+            <div class="sched-month-nav">
+                <a class="btn btn-outline btn-sm" href="/member/schedules?month={{ prev_month_param }}{% if sel_day %}&sel={{ sel_day.isoformat() }}{% endif %}" aria-label="이전 달">‹</a>
+                <span class="sched-month-label">{{ cal_year }}년 {{ cal_month }}월</span>
+                <a class="btn btn-outline btn-sm" href="/member/schedules?month={{ next_month_param }}{% if sel_day %}&sel={{ sel_day.isoformat() }}{% endif %}" aria-label="다음 달">›</a>
             </div>
         </div>
-        {% else %}
-        <div class="empty-box">
-            승인된 별도 일정이 없습니다. 모집 중인 일정에 신청하려면 <a href="/member/schedules/open">모집 중 일정 신청</a>으로 이동하세요.
+        {% include 'partials/sched_calendar.html' %}
+        {% if sel_day %}
+        <p class="sched-sel-banner">
+            <a href="/member/schedules?month={{ month_param }}" class="sched-link-all">날짜 선택 해제</a>
+            <span class="sched-sel-text">선택: <strong>{{ sel_day.strftime("%Y-%m-%d") }}</strong></span>
+        </p>
+        {% endif %}
+    </section>
+
+    <section class="member-approved-detail-section" aria-labelledby="ms-detail-h">
+        <h2 id="ms-detail-h" class="sched-h2">상세</h2>
+        {% if not sel_day %}
+        <div class="sched-empty-dashed sched-empty-pick-day">
+            <p class="sched-pick-day-lead">달력에서 <strong>날짜</strong>를 누르면 그날의 승인 일정만 여기에 표시됩니다.</p>
+            {% if has_month_events %}
+            <p class="sched-pick-day-hint">일정이 있는 날은 달력 칸에 짧게 표시돼요.</p>
+            {% else %}
+            <p class="sched-pick-day-hint">이번 달에 승인된 별도 일정이 없어요.</p>
+            {% endif %}
         </div>
-        {% endfor %}
-    </div>
+        {% elif schedules and schedules|length > 0 %}
+        <div class="card-list">
+            {% for schedule in schedules %}
+            <div class="card">
+                <div class="card-body">
+                    <h2>{{ schedule.title }}</h2>
+                    <p class="text-muted">{{ schedule.description or "설명 없음" }}</p>
+                    <div class="info-row"><strong>장소:</strong> {{ schedule.location or "-" }}</div>
+                    <div class="info-row"><strong>일시:</strong> {{ schedule.event_datetime.strftime("%Y-%m-%d %H:%M") }}</div>
+                    <div class="card-actions">
+                        <span class="badge success">승인됨</span>
+                        <a href="/member/schedules/{{ schedule.id }}" class="btn btn-outline btn-sm">상세·취소</a>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="empty-box">이 날짜에 승인된 별도 일정이 없어요. 다른 날을 눌러 보세요.</div>
+        {% endif %}
+    </section>
 </div>
 {% endblock %}

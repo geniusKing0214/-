@@ -2,6 +2,8 @@ __pycache__/
 *.py[cod]
 *$py.class
 *.db
+# Docker Compose: ./data/scheduler.db (호스트에 보이는 DB)
+/data/
 .env
 .env.*
 !.env.example

@@ -131,6 +131,40 @@ textarea {
     flex-shrink: 0;
 }
 
+/* 관리자: 넓은 화면에서 상단 바로가기(햄버거 없이 접근) */
+.topbar-admin-quick {
+    display: none;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    max-width: min(380px, 52vw);
+}
+
+@media (min-width: 720px) {
+    .topbar-admin-quick {
+        display: flex;
+    }
+}
+
+.topbar-admin-quick a {
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: var(--cute-primary-dark);
+    text-decoration: none;
+    padding: 5px 9px;
+    border-radius: 999px;
+    border: 1px solid rgba(124, 58, 237, 0.28);
+    background: rgba(255, 255, 255, 0.9);
+    white-space: nowrap;
+    line-height: 1.2;
+}
+
+.topbar-admin-quick a:hover {
+    background: rgba(124, 58, 237, 0.1);
+    border-color: rgba(124, 58, 237, 0.45);
+}
+
 .nav-user {
     display: inline-flex;
     align-items: center;
@@ -1119,6 +1153,27 @@ button.btn-google:hover {
     color: var(--cute-muted);
 }
 
+.form-error-banner {
+    margin: 0 0 14px;
+    padding: 10px 14px;
+    border-radius: 12px;
+    background: rgba(254, 226, 226, 0.95);
+    border: 1px solid rgba(248, 113, 113, 0.45);
+    color: #991b1b;
+    font-size: 0.875rem;
+    font-weight: 600;
+}
+
+.admin-extra-sched-list .admin-extra-sched-row {
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.admin-extra-sched-list .admin-extra-sched-row .admin-event-actions {
+    margin-left: auto;
+}
+
 .empty-inline {
     padding: 20px;
     text-align: center;
@@ -1302,6 +1357,26 @@ button.btn-google:hover {
 
 .admin-operations-summary {
     margin-bottom: 22px;
+}
+
+.admin-ops-hint {
+    margin: 0 0 14px;
+    font-size: 0.88rem;
+    color: var(--cute-muted);
+    line-height: 1.45;
+}
+
+.admin-ops-app-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    justify-content: flex-end;
+    align-items: center;
+    white-space: normal;
+}
+
+.admin-ops-app-actions .inline-form {
+    margin-right: 0;
 }
 
 .admin-ops-app-row .app-row-stats {
@@ -1575,6 +1650,49 @@ button.btn-google:hover {
 .sched-cal-cell.is-other-month {
     opacity: 0.35;
     pointer-events: none;
+}
+
+.sched-cal-wrap--member-chips .sched-cal-cell {
+    aspect-ratio: auto;
+    min-height: 92px;
+    max-height: none;
+    align-items: stretch;
+}
+
+.sched-cal-cell-ms {
+    width: 100%;
+    margin-top: 4px;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    flex: 1 1 auto;
+    min-height: 0;
+}
+
+.sched-cal-ms-line {
+    font-size: 0.62rem;
+    font-weight: 600;
+    line-height: 1.2;
+    color: #6d28d9;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    width: 100%;
+    text-align: left;
+}
+
+.sched-cal-ms-more {
+    font-size: 0.58rem;
+    font-weight: 700;
+    color: var(--cute-muted);
+    text-align: right;
+    margin-top: auto;
+}
+
+.member-approved-detail-section {
+    margin-top: 28px;
+    padding-top: 8px;
+    border-top: 1px dashed rgba(203, 213, 225, 0.85);
 }
 
 .sched-cal-num {
@@ -1927,4 +2045,31 @@ button.btn-google:hover {
     .sched-create-page .sched-slot-ui .sched-slot-remove {
         width: 100%;
     }
+}
+
+.sched-create-page .sched-error-banner {
+    margin: 0 0 14px;
+    padding: 10px 12px;
+    border-radius: 10px;
+    background: rgba(254, 226, 226, 0.95);
+    border: 1px solid rgba(252, 165, 165, 0.9);
+    color: #991b1b;
+    font-size: 0.9rem;
+}
+
+.sched-create-page .sched-slot-hold-hint {
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: #64748b;
+    white-space: nowrap;
+}
+
+.sched-create-page .sched-edit-actions {
+    margin-top: 18px;
+}
+
+.sched-create-page .sched-slot-remove.is-disabled,
+.sched-create-page .sched-slot-remove:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
 }

@@ -1,20 +1,126 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="page-wrap">
+<div class="page-wrap sched-page sched-create-page">
     <div class="page-header">
-        <h1>이벤트 · {{ event.title }}</h1>
-        <a href="/admin/events" class="btn btn-outline btn-sm">목록으로</a>
+        <h1>이벤트 수정 <span class="sched-admin-badge">관리자</span> · {{ event.title }}</h1>
+        <div class="admin-schedule-header-actions">
+            <a href="/" class="btn btn-outline btn-sm">홈 · 일정</a>
+            <a href="/admin/events" class="btn btn-outline btn-sm">이벤트 관리</a>
+            <a href="/admin/operations" class="btn btn-outline btn-sm">신청자 관리</a>
+        </div>
     </div>
 
-    <section class="card form-card wide-card">
-        <p class="subtext">
-            날짜·슬롯 수정 UI는 추후 연결할 수 있습니다. 신청 검토·승인은 운영 화면에서 진행하세요.
-        </p>
-        <div class="button-row">
-            <a href="/admin/operations" class="btn btn-primary">신청자 관리 (운영)</a>
-            <a href="/admin/events" class="btn btn-secondary">돌아가기</a>
-        </div>
+    <section class="sched-admin-card card" aria-labelledby="admin-edit-h">
+        <h2 id="admin-edit-h" class="visually-hidden">이벤트 편집</h2>
+        {% if edit_error %}
+        <p class="sched-error-banner" role="alert">{{ edit_error }}</p>
+        {% endif %}
+        <p class="sched-hint">날짜·이벤트명·장소·특이사항과 시간 슬롯을 수정할 수 있습니다. 신청이 있는 슬롯은 목록에서 빼거나 삭제할 수 없고, 정원은 신청·승인 인원 이상으로만 줄일 수 있어요.</p>
+        <form method="post" action="/admin/events/{{ event.id }}/edit" class="sched-create-form">
+            <div class="sched-form-grid">
+                <div class="sched-field">
+                    <label for="ev_date">날짜</label>
+                    <input type="date" id="ev_date" name="event_date" required value="{{ event.event_date.isoformat() }}">
+                </div>
+                <div class="sched-field sched-field-span2">
+                    <label for="ev_title">이벤트명</label>
+                    <input type="text" id="ev_title" name="title" placeholder="예: 4월 정기 모임" required maxlength="200" value="{{ event.title }}">
+                </div>
+                <div class="sched-field sched-field-span2">
+                    <label for="ev_location">장소</label>
+                    <input type="text" id="ev_location" name="location" placeholder="예: OO홀 3층" maxlength="300" value="{{ event.location or '' }}">
+                </div>
+                <div class="sched-field sched-field-full">
+                    <label for="ev_notes">특이사항</label>
+                    <textarea id="ev_notes" name="description" rows="3" placeholder="준비물, 주의사항 등">{{ event.description or '' }}</textarea>
+                </div>
+            </div>
+
+            <div class="sched-slots-head">
+                <span class="sched-slots-label">시간 슬롯</span>
+                <button type="button" class="btn btn-secondary small-btn" id="schedAddSlot">+ 시간 추가</button>
+            </div>
+            <div id="schedSlotBox" class="sched-slot-box sched-slot-ui">
+                {% set ordered_slots = event.slots|sort(attribute='start_time') %}
+                {% if ordered_slots %}
+                {% for slot in ordered_slots %}
+                {% set holds = slot_hold_counts.get(slot.id, 0) %}
+                <div class="sched-slot-block" data-holds="{{ holds }}">
+                    <input type="hidden" name="slot_ids" value="{{ slot.id }}">
+                    <div class="sched-slot-time">
+                        <input type="time" name="slot_times" required aria-label="시작 시간" value="{{ slot.start_time.strftime('%H:%M') }}">
+                    </div>
+                    <div class="sched-slot-meta">
+                        <label class="sched-cap-group">
+                            <span class="sched-cap-text">정원</span>
+                            <input type="number" name="slot_capacities" min="{{ [holds, 1] | max }}" value="{{ slot.capacity }}" class="sched-cap-input" aria-label="정원" title="정원">
+                        </label>
+                        {% if holds > 0 %}
+                        <span class="sched-slot-hold-hint" title="이 슬롯에 신청·승인 {{ holds }}명">신청 {{ holds }}명</span>
+                        {% endif %}
+                        <button type="button" class="btn btn-danger small-btn sched-slot-remove{% if holds > 0 %} is-disabled{% endif %}" aria-label="삭제"{% if holds > 0 %} disabled title="신청이 있는 슬롯은 삭제할 수 없습니다"{% endif %}>삭제</button>
+                    </div>
+                </div>
+                {% endfor %}
+                {% else %}
+                <div class="sched-slot-block" data-holds="0">
+                    <input type="hidden" name="slot_ids" value="">
+                    <div class="sched-slot-time">
+                        <input type="time" name="slot_times" required aria-label="시작 시간">
+                    </div>
+                    <div class="sched-slot-meta">
+                        <label class="sched-cap-group">
+                            <span class="sched-cap-text">정원</span>
+                            <input type="number" name="slot_capacities" min="1" value="1" class="sched-cap-input" aria-label="정원" title="정원">
+                        </label>
+                        <button type="button" class="btn btn-danger small-btn sched-slot-remove" aria-label="삭제">삭제</button>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+            <div class="sched-edit-actions">
+                <button type="submit" class="btn btn-primary full sched-submit">변경 저장</button>
+            </div>
+        </form>
     </section>
+    <script>
+    (function () {
+        var addBtn = document.getElementById("schedAddSlot");
+        var box = document.getElementById("schedSlotBox");
+        if (!addBtn || !box) return;
+        var rowHtml =
+            '<div class="sched-slot-block" data-holds="0">' +
+            '<input type="hidden" name="slot_ids" value="">' +
+            '<div class="sched-slot-time">' +
+            '<input type="time" name="slot_times" required aria-label="시작 시간">' +
+            '</div>' +
+            '<div class="sched-slot-meta">' +
+            '<label class="sched-cap-group">' +
+            '<span class="sched-cap-text">정원</span>' +
+            '<input type="number" name="slot_capacities" min="1" value="1" class="sched-cap-input" aria-label="정원" title="정원">' +
+            '</label>' +
+            '<button type="button" class="btn btn-danger small-btn sched-slot-remove" aria-label="삭제">삭제</button>' +
+            '</div>' +
+            '</div>';
+        addBtn.addEventListener("click", function () {
+            box.insertAdjacentHTML("beforeend", rowHtml);
+        });
+        box.addEventListener("click", function (e) {
+            var t = e.target;
+            if (!t || !t.classList || !t.classList.contains("sched-slot-remove")) return;
+            if (t.disabled || t.classList.contains("is-disabled")) {
+                alert("신청이 있는 슬롯은 삭제할 수 없습니다.");
+                return;
+            }
+            var rows = box.querySelectorAll(".sched-slot-block");
+            if (rows.length <= 1) {
+                alert("최소 1개의 시간 슬롯이 필요합니다.");
+                return;
+            }
+            t.closest(".sched-slot-block").remove();
+        });
+    })();
+    </script>
 </div>
 {% endblock %}

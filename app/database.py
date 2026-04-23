@@ -93,7 +93,16 @@ def _engine_kwargs(url: str) -> dict:
 
 engine = create_engine(DATABASE_URL, **_engine_kwargs(DATABASE_URL))
 
-if not DATABASE_URL.startswith("sqlite:"):
+if DATABASE_URL.startswith("sqlite:"):
+    try:
+        from sqlalchemy.engine import make_url
+
+        _u = make_url(DATABASE_URL)
+        if _u.database:
+            logger.info("SQLite 데이터베이스 파일: %s", _u.database)
+    except Exception:
+        pass
+else:
     logger.info("DB 백엔드: PostgreSQL (배포 후에도 데이터 유지)")
 
 SessionLocal = sessionmaker(
@@ -112,12 +121,69 @@ def ensure_sqlite_migrations(engine) -> None:
     with engine.begin() as conn:
         cols = conn.execute(text("PRAGMA table_info(users)")).fetchall()
         names = {row[1] for row in cols}
+        # 예전 스키마: email / name — 현재 모델은 username 기준
+        if "username" not in names and "email" in names:
+            conn.execute(text("ALTER TABLE users RENAME COLUMN email TO username"))
+            cols = conn.execute(text("PRAGMA table_info(users)")).fetchall()
+            names = {row[1] for row in cols}
+        if "approval_status" not in names:
+            conn.execute(
+                text(
+                    "ALTER TABLE users ADD COLUMN approval_status VARCHAR(30) "
+                    "DEFAULT 'approved'"
+                )
+            )
+        if "is_admin" not in names:
+            conn.execute(text("ALTER TABLE users ADD COLUMN is_admin BOOLEAN DEFAULT 0"))
+            cols = conn.execute(text("PRAGMA table_info(users)")).fetchall()
+            names = {row[1] for row in cols}
         if "nickname" not in names:
             conn.execute(text("ALTER TABLE users ADD COLUMN nickname VARCHAR(50)"))
         if "google_sub" not in names:
             conn.execute(text("ALTER TABLE users ADD COLUMN google_sub VARCHAR(255)"))
         if "firebase_uid" not in names:
             conn.execute(text("ALTER TABLE users ADD COLUMN firebase_uid VARCHAR(128)"))
+        # 레거시 name → 빈 닉네임 채우기
+        names_after = {row[1] for row in conn.execute(text("PRAGMA table_info(users)")).fetchall()}
+        if "name" in names_after and "nickname" in names_after:
+            conn.execute(
+                text(
+                    "UPDATE users SET nickname = name WHERE "
+                    "(nickname IS NULL OR TRIM(nickname) = '') "
+                    "AND name IS NOT NULL AND TRIM(name) != ''"
+                )
+            )
+
+
+def ensure_users_is_admin_coercion(engine) -> None:
+    """is_admin 이 NULL 이면 비관리자로 맞춤. raw SQL 대신 ORM으로 타입(SQLite·PostgreSQL·레거시 정수 등) 호환."""
+    try:
+        insp = inspect(engine)
+        if not insp.has_table("users"):
+            return
+        col_names = {c["name"] for c in insp.get_columns("users")}
+        if "is_admin" not in col_names:
+            return
+    except Exception as e:
+        logger.warning("ensure_users_is_admin_coercion (inspect): %s", e)
+        return
+
+    try:
+        from app.models import User
+
+        db = SessionLocal()
+        try:
+            n = (
+                db.query(User)
+                .filter(User.is_admin.is_(None))
+                .update({User.is_admin: False}, synchronize_session=False)
+            )
+            if n:
+                db.commit()
+        finally:
+            db.close()
+    except Exception as e:
+        logger.warning("ensure_users_is_admin_coercion: %s", e)
 
 
 def ensure_schedule_application_status_migration(engine) -> None:

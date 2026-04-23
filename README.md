@@ -58,21 +58,22 @@ docker compose up --build -d
 
 원인은 거의 항상 **SQLite 파일이 “영구 볼륨”이 아니라 컨테이너 안 임시 디스크(예: `/app`)에만 생긴 경우**입니다. 이미지가 바뀌면 그 레이어는 초기화됩니다.
 
-- **Docker Compose**: `docker-compose.yml`이 `DATABASE_URL=sqlite:////data/scheduler.db` 와 **볼륨 `scheduler_data:/data`** 를 씁니다.  
-  - `docker compose down -v` 를 쓰면 **볼륨까지 지워져 DB가 통째로 삭제**됩니다. (`-v` 없이 내리기)
+- **Docker Compose**: `DATABASE_URL=sqlite:////data/scheduler.db` 이고, 호스트의 **`./data` 폴더가 컨테이너 `/data`에 마운트**됩니다. DB 파일은 **`프로젝트/data/scheduler.db`** 에 보이므로 백업·복사가 쉽습니다.  
+  - 예전에 쓰던 **이름 있는 Docker 볼륨**을 쓰던 경우와 달리, `docker compose down`만으로는 `./data` 안의 파일이 지워지지 않습니다. (`docker compose down -v`는 **이름 있는 볼륨**이 있을 때만 해당)
 - **Dockerfile 기본값**은 `/data/scheduler.db` 로 맞춰 두었습니다 (이전의 `/app` 기본값은 제거됨).
 - **Fly.io**: `fly.toml`의 `[mounts]` + `fly volumes create scheduler_data` 가 필수입니다.  
   - SQLite는 **한 앱에 Machine 1대**만 권장: `fly scale count 1`
 - 배포 로그에 `SQLite가 /data 볼륨이 아닌 URL을 사용 중` 경고가 나오면, 플랫폼의 환경 변수·볼륨 마운트를 다시 확인하세요.
 
-### 예전에 쓰던 `scheduler.db` 옮기기 (로컬 → Docker 볼륨)
+### 예전에 쓰던 `scheduler.db` 옮기기 (로컬 → Docker)
 
-로컬 프로젝트 루트에 데이터가 있으면, 컨테이너 기동 후 한 번 복사할 수 있습니다.
+프로젝트 루트에 예전 `scheduler.db`가 있으면 Compose로 올리기 **전에** `data` 폴더에 넣어두면 됩니다.
 
 ```bash
+mkdir -p data
+copy /Y .\scheduler.db .\data\scheduler.db
 docker compose up -d
-docker cp ./scheduler.db scheduler_app-web-1:/data/scheduler.db
-docker compose restart web
 ```
 
-(컨테이너 이름은 `docker compose ps` 로 확인)
+(Windows PowerShell이면 `Copy-Item .\scheduler.db .\data\scheduler.db`.)  
+이미 컨테이너가 돌고 있으면 `docker cp ./scheduler.db <컨테이너명>:/data/scheduler.db` 후 `docker compose restart web` 도 가능합니다 (`docker compose ps`로 컨테이너 이름 확인).

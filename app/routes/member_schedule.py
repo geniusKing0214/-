@@ -1,11 +1,13 @@
+import calendar as calendar_mod
 from datetime import date, datetime, timedelta
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request, status
 from fastapi.responses import RedirectResponse
 from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
+from app.cal_grid import build_cal_weeks, schedule_calendar_date
 from app.database import get_db
 from app.models import Schedule, ScheduleApplication, User
 
@@ -113,20 +115,55 @@ def _member_html(
 @router.get("")
 def member_schedule_list(
     request: Request,
+    month: Optional[str] = Query(None),
+    sel: Optional[str] = Query(None),
     db: Session = Depends(get_db),
     current_user: User = Depends(require_approved_user),
 ):
-    """내게 승인된 별도 일정만 (메뉴 · 별도 모집 일정)."""
-    schedules = (
+    """내게 승인된 별도 일정 — 달력 칸에 표시, 날짜 선택 시 아래에 상세."""
+    from app.main import _parse_home_month, _parse_sel_day, _shift_calendar_month
+
+    y, m = _parse_home_month(month)
+    month_param = f"{y}-{m:02d}"
+    py, pm = _shift_calendar_month(y, m, -1)
+    ny, nm = _shift_calendar_month(y, m, 1)
+    first = date(y, m, 1)
+    last = date(y, m, calendar_mod.monthrange(y, m)[1])
+
+    approved = (
         db.query(Schedule)
         .join(ScheduleApplication, ScheduleApplication.schedule_id == Schedule.id)
         .filter(
             ScheduleApplication.user_id == current_user.id,
-            ScheduleApplication.status == "approved",
+            ScheduleApplication.status.in_(("approved", "applied")),
         )
         .order_by(Schedule.event_datetime.asc())
         .all()
     )
+    member_schedules_by_date: dict[date, list] = {}
+    for s in approved:
+        sd = schedule_calendar_date(s)
+        if first <= sd <= last:
+            member_schedules_by_date.setdefault(sd, []).append(s)
+
+    cal_weeks = build_cal_weeks(
+        y,
+        m,
+        view="member_personal",
+        by_date={},
+        member_schedules_by_date=member_schedules_by_date,
+    )
+
+    sel_day = _parse_sel_day(sel)
+    if sel_day and (sel_day.year, sel_day.month) != (y, m):
+        sel_day = None
+
+    if sel_day:
+        schedules = member_schedules_by_date.get(sel_day, [])
+    else:
+        schedules = []
+
+    has_month_events = bool(member_schedules_by_date)
 
     return _member_html(
         request,
@@ -134,6 +171,18 @@ def member_schedule_list(
         {
             "page_title": "내 승인 별도 일정",
             "schedules": schedules,
+            "cal_year": y,
+            "cal_month": m,
+            "month_param": month_param,
+            "prev_month_param": f"{py}-{pm:02d}",
+            "next_month_param": f"{ny}-{nm:02d}",
+            "cal_weeks": cal_weeks,
+            "weekday_headers": ("월", "화", "수", "목", "금", "토", "일"),
+            "sel_day": sel_day,
+            "has_month_events": has_month_events,
+            "sched_calendar_base_path": "/member/schedules",
+            "sched_show_member_cal_chips": True,
+            "sched_cal_wrap_class": "sched-cal-wrap--member-chips",
         },
         db,
         current_user,
