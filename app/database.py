@@ -1,9 +1,14 @@
+import atexit
 import logging
 import os
 import shutil
+import sqlite3
+import time
+from datetime import datetime, timezone
 from pathlib import Path
+from typing import Optional
 
-from sqlalchemy import create_engine, inspect, text
+from sqlalchemy import create_engine, event, inspect, text
 from sqlalchemy.orm import sessionmaker, declarative_base
 
 logger = logging.getLogger(__name__)
@@ -17,16 +22,30 @@ _default_url = f"sqlite:///{_default_sqlite.as_posix()}"
 
 
 def _migrate_legacy_root_sqlite_if_using_default() -> None:
-    """예전 기본값(<루트>/scheduler.db)만 있으면 data/scheduler.db 로 복사해 경로를 통일."""
+    """예전 기본값(<루트>/scheduler.db)을 data/scheduler.db 로 맞춤. data가 없거나 0바이트면 루트에서 복사."""
     if os.environ.get("DATABASE_URL", "").strip():
-        return
-    if _default_sqlite.exists():
         return
     legacy = _project_root / "scheduler.db"
     if not legacy.is_file():
         return
     try:
+        need_copy = False
+        if not _default_sqlite.exists():
+            need_copy = True
+        else:
+            try:
+                if _default_sqlite.stat().st_size == 0:
+                    need_copy = True
+            except OSError:
+                need_copy = True
+        if not need_copy:
+            return
         _default_sqlite.parent.mkdir(parents=True, exist_ok=True)
+        if _default_sqlite.exists():
+            try:
+                _default_sqlite.unlink()
+            except OSError as e:
+                logger.warning("빈/손상 data DB 제거 실패(덮어쓰기 시도): %s", e)
         shutil.copy2(legacy, _default_sqlite)
         logger.info(
             "기존 루트의 scheduler.db를 %s 로 복사했습니다. 이후 로그인·가입 데이터는 이 파일에만 저장됩니다.",
@@ -34,6 +53,138 @@ def _migrate_legacy_root_sqlite_if_using_default() -> None:
         )
     except OSError as e:
         logger.warning("scheduler.db → data/scheduler.db 복사 실패: %s", e)
+
+
+def _sqlite_active_file_path(url: str) -> Optional[Path]:
+    """SQLite DATABASE_URL 에 해당하는 로컬 파일 경로(절대)."""
+    if not url.startswith("sqlite:"):
+        return None
+    try:
+        from sqlalchemy.engine import make_url
+
+        u = make_url(url)
+        if not u.database:
+            return None
+        p = Path(u.database)
+        if not p.is_absolute():
+            p = _project_root / p
+        return p
+    except Exception:
+        return None
+
+
+def _prune_old_sqlite_backups(backup_dir: Path, keep: int) -> None:
+    keep = max(3, min(int(keep), 200))
+    files = sorted(
+        [p for p in backup_dir.glob("scheduler*.db") if p.is_file()],
+        key=lambda p: p.stat().st_mtime,
+        reverse=True,
+    )
+    for p in files[keep:]:
+        try:
+            p.unlink()
+        except OSError:
+            pass
+
+
+def _sqlite_do_backup_to_file(db_path: Path, dest: Path) -> bool:
+    try:
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        src_conn = sqlite3.connect(db_path.as_posix(), timeout=60.0)
+        try:
+            dst_conn = sqlite3.connect(dest.as_posix(), timeout=60.0)
+            try:
+                with dst_conn:
+                    src_conn.backup(dst_conn)
+            finally:
+                dst_conn.close()
+        finally:
+            src_conn.close()
+        return True
+    except Exception as e:
+        logger.warning("SQLite 백업 복사 실패: %s", e)
+        return False
+
+
+def _sqlite_autobackup_if_configured(
+    db_path: Path, *, force: bool = False, shutdown: bool = False
+) -> None:
+    """주기적으로 backups/ 에 복사. force=True 이면 간격 무시(종료 시 등)."""
+    if shutdown:
+        if os.environ.get("SCHEDULER_SQLITE_BACKUP_AT_EXIT", "1").strip().lower() in (
+            "0",
+            "false",
+            "no",
+            "off",
+        ):
+            return
+    else:
+        raw = os.environ.get("SCHEDULER_SQLITE_BACKUP", "1").strip().lower()
+        if raw in ("0", "false", "no", "off"):
+            return
+    if not db_path.is_file():
+        return
+    try:
+        if db_path.stat().st_size < 64:
+            return
+    except OSError:
+        return
+
+    try:
+        keep = int(os.environ.get("SCHEDULER_SQLITE_BACKUP_KEEP", "40"))
+    except ValueError:
+        keep = 40
+
+    cloudish = bool(os.environ.get("FLY_APP_NAME")) or os.environ.get(
+        "RENDER", ""
+    ).lower() in ("true", "1", "yes")
+    default_interval = "3600" if cloudish else "21600"
+    try:
+        interval = int(
+            os.environ.get(
+                "SCHEDULER_SQLITE_BACKUP_INTERVAL_SECONDS", default_interval
+            )
+        )
+    except ValueError:
+        interval = int(default_interval)
+    interval = max(60, interval)
+
+    backup_dir = db_path.parent / "backups"
+    backup_dir.mkdir(parents=True, exist_ok=True)
+    marker = backup_dir / ".last_autobackup_ts"
+    now = time.time()
+    if not force and not shutdown:
+        if marker.is_file():
+            try:
+                if now - marker.stat().st_mtime < interval:
+                    return
+            except OSError:
+                pass
+
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+    if shutdown:
+        dest = backup_dir / f"scheduler-shutdown-{stamp}.db"
+    else:
+        dest = backup_dir / f"scheduler-{stamp}.db"
+    if not _sqlite_do_backup_to_file(db_path, dest):
+        return
+    if not shutdown:
+        try:
+            marker.touch()
+        except OSError:
+            pass
+    logger.info("SQLite 백업 저장: %s", dest)
+    _prune_old_sqlite_backups(backup_dir, keep)
+
+
+def _sqlite_shutdown_backup() -> None:
+    try:
+        p = _sqlite_active_file_path(DATABASE_URL)
+        if p is None:
+            return
+        _sqlite_autobackup_if_configured(p, force=True, shutdown=True)
+    except Exception as e:
+        logger.warning("종료 시 SQLite 백업 스킵: %s", e)
 
 
 def _warn_if_duplicate_sqlite_files() -> None:
@@ -72,6 +223,41 @@ _warn_if_duplicate_sqlite_files()
 
 def _is_render() -> bool:
     return os.environ.get("RENDER", "").lower() in ("true", "1", "yes")
+
+
+def _enforce_persistent_storage_or_exit() -> None:
+    """Docker/Fly/Render에서 비영구 SQLite로 뜨면 기동 자체를 막아 유실을 예방."""
+    if os.environ.get("ALLOW_EPHEMERAL_SQLITE", "").strip().lower() in (
+        "1",
+        "true",
+        "yes",
+    ):
+        logger.warning(
+            "ALLOW_EPHEMERAL_SQLITE=1 — 컨테이너 임시 디스크 SQLite는 배포 시 데이터가 사라질 수 있습니다."
+        )
+        return
+    u = DATABASE_URL
+    if u.startswith("postgresql"):
+        return
+    if not u.startswith("sqlite:"):
+        return
+    norm = u.replace("\\", "/")
+    if norm.startswith("sqlite:////data") or norm.startswith("sqlite:////app/data"):
+        return
+    in_cloud = bool(os.environ.get("FLY_APP_NAME")) or _is_render()
+    in_docker = Path("/.dockerenv").exists()
+    if in_cloud or in_docker:
+        logger.critical(
+            "SQLite가 영구 볼륨(/data)에 연결되지 않았습니다. "
+            "이 설정으로는 재배포·이미지 갱신 시 스케줄·회원 DB가 유실됩니다.\n"
+            "  • Fly.io: fly.toml [mounts] + DATABASE_URL=sqlite:////data/scheduler.db\n"
+            "  • Docker Compose: volumes ./data:/data + DATABASE_URL=sqlite:////data/scheduler.db\n"
+            "  • Render: PostgreSQL DATABASE_URL (render.yaml 권장)\n"
+            "개발 전용 우회: ALLOW_EPHEMERAL_SQLITE=1\n"
+            "현재 DATABASE_URL=%r",
+            u,
+        )
+        raise SystemExit(2)
 
 
 def _log_sqlite_persistence_hint(url: str) -> None:
@@ -132,6 +318,7 @@ def _ensure_sqlite_parent_dir(url: str) -> None:
 
 
 _ensure_sqlite_parent_dir(DATABASE_URL)
+_enforce_persistent_storage_or_exit()
 
 
 def _engine_kwargs(url: str) -> dict:
@@ -143,12 +330,36 @@ def _engine_kwargs(url: str) -> dict:
 engine = create_engine(DATABASE_URL, **_engine_kwargs(DATABASE_URL))
 
 if DATABASE_URL.startswith("sqlite:"):
-    try:
-        from sqlalchemy.engine import make_url
 
-        _u = make_url(DATABASE_URL)
-        if _u.database:
-            logger.info("SQLite 데이터베이스 파일: %s", _u.database)
+    @event.listens_for(engine, "connect")
+    def _sqlite_set_wal(dbapi_connection, _connection_record) -> None:
+        try:
+            cur = dbapi_connection.cursor()
+            cur.execute("PRAGMA journal_mode=WAL")
+            cur.execute("PRAGMA synchronous=NORMAL")
+            cur.close()
+        except Exception:
+            pass
+
+
+_sqlite_path = _sqlite_active_file_path(DATABASE_URL)
+if _sqlite_path is not None:
+    _sqlite_autobackup_if_configured(_sqlite_path)
+
+if DATABASE_URL.startswith("sqlite:"):
+    try:
+        if _sqlite_path is not None:
+            logger.info("SQLite 실제 파일: %s", _sqlite_path.resolve())
+            logger.info(
+                "SQLite 자동 백업 폴더(SCHEDULER_SQLITE_BACKUP=1): %s",
+                (_sqlite_path.parent / "backups").resolve(),
+            )
+        else:
+            from sqlalchemy.engine import make_url
+
+            _u = make_url(DATABASE_URL)
+            if _u.database:
+                logger.info("SQLite 데이터베이스 파일: %s", _u.database)
     except Exception:
         pass
 else:
@@ -159,6 +370,8 @@ SessionLocal = sessionmaker(
     autoflush=False,
     bind=engine
 )
+
+atexit.register(_sqlite_shutdown_backup)
 
 Base = declarative_base()
 

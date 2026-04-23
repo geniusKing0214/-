@@ -54,6 +54,21 @@ docker compose up --build -d
 
 브라우저: http://localhost:8000
 
+## DB(회원·스케줄)가 모이는 위치
+
+| 실행 방식 | 데이터가 쌓이는 곳 | 배포·재시작 후 유지 |
+|-----------|---------------------|---------------------|
+| **로컬** (`uvicorn`만, `DATABASE_URL` 없음) | 프로젝트 루트 **`data/scheduler.db`** | PC에 파일이 남으면 유지. 예전 루트 `scheduler.db`만 있으면 첫 기동 시 `data/`로 복사 시도. |
+| **Docker Compose** | 호스트 **`./data/scheduler.db`** ↔ 컨테이너 `/data/scheduler.db` | `./data`를 마운트하므로 **이미지를 다시 빌드해도 DB는 유지**됩니다. |
+| **Fly.io + SQLite** | 볼륨에 붙은 **`/data/scheduler.db`** | **`fly.toml`의 `[mounts]` + `fly volumes create`** 가 없으면 매 배포마다 새 컨테이너 디스크라 **데이터가 비는 것과 같습니다.** |
+| **Render + PostgreSQL** | 관리형 Postgres (파일 경로 아님) | Blueprint의 `DATABASE_URL`이 Postgres를 가리키면 **재배포해도 데이터 유지**가 기본입니다. |
+| **Render + SQLite만** | 디스크에 마운트한 경로만 안전 | 무료 웹만 쓰면 디스크를 못 붙이는 경우가 많아 **DB가 비는 것**이 나올 수 있습니다. Postgres 권장. |
+
+앱 기동 시 로그에 **`SQLite 실제 파일`** 과 **`SQLite 백업 폴더`** (`…/backups`) 경로가 찍힙니다.  
+SQLite 사용 시 일정 간격으로 `backups/scheduler-날짜.db` 자동 백업(기본 켜짐), **프로세스 종료 시** `scheduler-shutdown-*.db` 백업(기본 켜짐), 연결 시 **WAL 모드**로 손상 위험을 줄입니다. (`.env.example`의 `SCHEDULER_SQLITE_*` 참고)
+
+**Docker / Fly / Render** 에서 SQLite `DATABASE_URL`이 **`sqlite:////data/...` 또는 `sqlite:////app/data/...`** 가 아니면 **앱이 기동하지 않습니다**(`SystemExit`). 배포 한 번에 DB가 통째로 사라지는 설정을 막기 위함입니다. 정말 임시 디스크만 써야 하면 `ALLOW_EPHEMERAL_SQLITE=1` (비권장).
+
 ## 스케줄·회원 데이터가 배포 후 사라질 때 (SQLite)
 
 원인은 거의 항상 **SQLite 파일이 “영구 볼륨”이 아니라 컨테이너 안 임시 디스크(예: `/app`)에만 생긴 경우**입니다. 이미지가 바뀌면 그 레이어는 초기화됩니다.
