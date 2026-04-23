@@ -1,5 +1,6 @@
 import logging
 import os
+import shutil
 from pathlib import Path
 
 from sqlalchemy import create_engine, inspect, text
@@ -8,11 +9,51 @@ from sqlalchemy.orm import sessionmaker, declarative_base
 logger = logging.getLogger(__name__)
 
 # 상대 경로(./scheduler.db)는 실행 cwd에 따라 파일이 달라져 DB가 비는 것처럼 보일 수 있음.
-# app/ 상위(프로젝트 루트)에 항상 같은 파일을 쓴다.
+# 로컬·Docker 모두 프로젝트 루트의 data/scheduler.db 한 곳을 쓴다(Docker Compose의 ./data 마운트와 동일).
 _app_dir = Path(__file__).resolve().parent
 _project_root = _app_dir.parent
-_default_sqlite = _project_root / "scheduler.db"
+_default_sqlite = _project_root / "data" / "scheduler.db"
 _default_url = f"sqlite:///{_default_sqlite.as_posix()}"
+
+
+def _migrate_legacy_root_sqlite_if_using_default() -> None:
+    """예전 기본값(<루트>/scheduler.db)만 있으면 data/scheduler.db 로 복사해 경로를 통일."""
+    if os.environ.get("DATABASE_URL", "").strip():
+        return
+    if _default_sqlite.exists():
+        return
+    legacy = _project_root / "scheduler.db"
+    if not legacy.is_file():
+        return
+    try:
+        _default_sqlite.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(legacy, _default_sqlite)
+        logger.info(
+            "기존 루트의 scheduler.db를 %s 로 복사했습니다. 이후 로그인·가입 데이터는 이 파일에만 저장됩니다.",
+            _default_sqlite,
+        )
+    except OSError as e:
+        logger.warning("scheduler.db → data/scheduler.db 복사 실패: %s", e)
+
+
+def _warn_if_duplicate_sqlite_files() -> None:
+    """루트 DB가 data보다 더 최근이면(예: 예전 기본 경로로만 실행) 혼동 방지 로그."""
+    if os.environ.get("DATABASE_URL", "").strip():
+        return
+    legacy = _project_root / "scheduler.db"
+    if not legacy.is_file() or not _default_sqlite.is_file():
+        return
+    try:
+        if legacy.stat().st_mtime <= _default_sqlite.stat().st_mtime + 1.0:
+            return
+    except OSError:
+        return
+    logger.warning(
+        "프로젝트 루트 scheduler.db가 data/scheduler.db보다 최근입니다. "
+        "앱은 data/scheduler.db만 사용합니다. 루트에 최신 가입·로그인 데이터가 있다면 "
+        "서버를 끈 뒤 루트 파일을 data/scheduler.db로 덮어쓰세요."
+    )
+
 
 def _normalize_database_url(raw: str) -> str:
     """Render 등이 주는 postgres:// 를 SQLAlchemy가 기대하는 postgresql:// 로 맞춘다."""
@@ -25,6 +66,9 @@ def _normalize_database_url(raw: str) -> str:
 _raw_database_url = os.environ.get("DATABASE_URL", _default_url)
 DATABASE_URL = _normalize_database_url(_raw_database_url)
 
+_migrate_legacy_root_sqlite_if_using_default()
+_warn_if_duplicate_sqlite_files()
+
 
 def _is_render() -> bool:
     return os.environ.get("RENDER", "").lower() in ("true", "1", "yes")
@@ -34,16 +78,21 @@ def _log_sqlite_persistence_hint(url: str) -> None:
     """재배포 후 데이터가 비는 경우, 대개 DB 파일이 컨테이너 임시 레이어에만 있을 때이다."""
     if not url.startswith("sqlite:"):
         return
+    norm = url.replace("\\", "/")
     in_container = (
         Path("/.dockerenv").exists()
         or bool(os.environ.get("FLY_APP_NAME"))
         or _is_render()
     )
-    if not in_container:
-        return
-    uses_data_volume = url.startswith("sqlite:////data") or url.startswith(
+    uses_data_volume = norm.startswith("sqlite:////data") or norm.startswith(
         "sqlite:////app/data"
     )
+    if not in_container:
+        if "/data/scheduler.db" in norm:
+            logger.info(
+                "SQLite 로컬 파일: 프로젝트 data/scheduler.db (Docker Compose ./data 와 동일 경로)."
+            )
+        return
     if uses_data_volume:
         logger.info("SQLite DATABASE_URL이 영구 볼륨 경로(/data 또는 /app/data)를 사용합니다.")
     else:
@@ -55,7 +104,7 @@ def _log_sqlite_persistence_hint(url: str) -> None:
             "현재=%r",
             url,
         )
-    if _is_render() and url.startswith("sqlite:") and not uses_data_volume:
+    if _is_render() and not uses_data_volume:
         logger.warning(
             "Render 환경: 관리형 PostgreSQL을 쓰면(환경 변수 DATABASE_URL) 별도 디스크 없이 데이터가 유지됩니다. "
             "render.yaml 예시를 저장소 루트에 참고하세요."
