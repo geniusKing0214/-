@@ -779,7 +779,7 @@ def _sched_home_view_context(
     sel: Optional[str],
     view: str,
 ) -> dict[str, Any]:
-    """view: admin_merged | member_personal | member_events"""
+    """view: admin_merged | member_merged | member_personal | member_events"""
     y, m = _parse_home_month(month)
     month_param = f"{y}-{m:02d}"
     py, pm = _shift_calendar_month(y, m, -1)
@@ -798,11 +798,15 @@ def _sched_home_view_context(
     else:
         approved_member_schedules = (
             db.query(Schedule)
-            .join(ScheduleApplication, ScheduleApplication.schedule_id == Schedule.id)
-            .filter(
-                ScheduleApplication.user_id == current_user.id,
-                ScheduleApplication.status.in_(("approved", "applied")),
+            .join(
+                ScheduleApplication,
+                (ScheduleApplication.schedule_id == Schedule.id)
+                & (ScheduleApplication.user_id == current_user.id)
+                & (
+                    ScheduleApplication.status.in_(("approved", "applied"))
+                ),
             )
+            .distinct()
             .order_by(Schedule.event_datetime.asc())
             .all()
         )
@@ -901,6 +905,18 @@ def _sched_home_view_context(
         sched_home_show_member_blocks = False
         sched_home_personal_only = False
         sched_show_member_cal_chips = False
+    elif view == "member_merged":
+        page_title = "스케줄"
+        sched_detail_section_title = "일정·슬롯"
+        sched_hero_subtitle = (
+            "달력에서 날짜를 누르면 그날의 일정·슬롯이 아래에 표시됩니다. "
+            "관리자가 등록한 일정과 내 승인 별도 일정이 함께 보여요."
+        )
+        sched_calendar_base_path = "/"
+        sched_home_show_event_blocks = True
+        sched_home_show_member_blocks = True
+        sched_home_personal_only = False
+        sched_show_member_cal_chips = False
     else:
         page_title = "스케줄"
         sched_detail_section_title = "슬롯 신청"
@@ -960,7 +976,8 @@ def index(
         return redirect("/login?error=google_pending")
 
     is_admin = bool(getattr(current_user, "is_admin", False))
-    view = "admin_merged" if is_admin else "member_personal"
+    # 비관리자도 홈에서 이벤트·슬롯(관리자 스케줄 생성)을 볼 수 있어야 함. 별도 일정만 쓰던 member_personal 은 사용하지 않음.
+    view = "admin_merged" if is_admin else "member_merged"
     ctx = _sched_home_view_context(db, current_user, month, sel, view)
 
     return render(

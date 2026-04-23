@@ -76,9 +76,10 @@ def build_cal_weeks(
     member_schedules_by_date: dict[date, list],
 ) -> list[list[dict[str, Any]]]:
     """
-    view: admin_merged | member_personal | member_events
+    view: admin_merged | member_merged | member_personal | member_events
     member_personal: 달력 칸 안에 승인된 별도 일정(시간+제목) 최대 2개 + 더보기
-    그 외: 점(calendar_marker_count)만 사용
+    admin_merged / member_merged: 이벤트+별도 일정 점 합산
+    그 외(member_events 등): 점(calendar_marker_count)만 사용
     """
     member_schedules_by_date = _normalize_member_schedules_by_date(member_schedules_by_date)
     cal = calendar_mod.Calendar(firstweekday=0)

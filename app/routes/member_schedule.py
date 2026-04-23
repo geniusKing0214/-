@@ -18,6 +18,8 @@ _WEEKDAY_KO = ("월", "화", "수", "목", "금", "토", "일")
 # 정원·중복 신청: 대기+승인 모두 점유. 취소 가능: 대기 또는 승인.
 _MEMBER_SCHEDULE_HOLD_STATUSES = ("pending", "approved")
 _MEMBER_SCHEDULE_LIST_STATUSES = ("pending", "approved", "rejected", "cancelled")
+# 달력·「내 승인 별도 일정」목록: 이 유저에게 관리자 승인된 건만 (applied 는 구버전 DB 호환)
+_MEMBER_APPROVED_CALENDAR_STATUSES = ("approved", "applied")
 
 
 def _day_label_ko(d: date) -> str:
@@ -132,11 +134,15 @@ def member_schedule_list(
 
     approved = (
         db.query(Schedule)
-        .join(ScheduleApplication, ScheduleApplication.schedule_id == Schedule.id)
-        .filter(
-            ScheduleApplication.user_id == current_user.id,
-            ScheduleApplication.status.in_(("approved", "applied")),
+        .join(
+            ScheduleApplication,
+            (ScheduleApplication.schedule_id == Schedule.id)
+            & (ScheduleApplication.user_id == current_user.id)
+            & (
+                ScheduleApplication.status.in_(_MEMBER_APPROVED_CALENDAR_STATUSES)
+            ),
         )
+        .distinct()
         .order_by(Schedule.event_datetime.asc())
         .all()
     )
@@ -296,6 +302,19 @@ def member_schedule_detail(
     schedule = db.query(Schedule).filter(Schedule.id == schedule_id).first()
     if not schedule:
         raise HTTPException(status_code=404, detail="스케줄을 찾을 수 없습니다.")
+
+    if schedule.status != "open":
+        may_view = (
+            db.query(ScheduleApplication.id)
+            .filter(
+                ScheduleApplication.schedule_id == schedule_id,
+                ScheduleApplication.user_id == current_user.id,
+                ScheduleApplication.status.in_(_MEMBER_SCHEDULE_HOLD_STATUSES),
+            )
+            .first()
+        )
+        if not may_view:
+            raise HTTPException(status_code=404, detail="스케줄을 찾을 수 없습니다.")
 
     my_application = (
         db.query(ScheduleApplication)
