@@ -940,6 +940,34 @@ textarea {
     gap: 8px;
 }
 
+/* 스케줄 생성·편집 등: 제목 옆 홈/이벤트 버튼 모바일에서도 한 줄 */
+@media (max-width: 640px) {
+    .sched-create-page .page-header {
+        flex-wrap: nowrap;
+        align-items: flex-start;
+        gap: 8px;
+    }
+
+    .sched-create-page .page-header h1 {
+        flex: 1 1 auto;
+        min-width: 0;
+        font-size: 1.15rem;
+        line-height: 1.35;
+    }
+
+    .sched-create-page .admin-schedule-header-actions {
+        flex-wrap: nowrap;
+        flex-shrink: 0;
+        gap: 6px;
+    }
+
+    .sched-create-page .admin-schedule-header-actions .btn-sm {
+        padding: 0 8px;
+        font-size: 11px;
+        white-space: nowrap;
+    }
+}
+
 .admin-schedule-toolbar {
     margin-bottom: 20px;
 }
