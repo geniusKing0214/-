@@ -234,6 +234,14 @@ def _is_render() -> bool:
     return os.environ.get("RENDER", "").lower() in ("true", "1", "yes")
 
 
+def _is_render_native_project_sqlite(url: str) -> bool:
+    """Render 'Python 3' 네이티브 빌드는 Docker 없이 /opt/render/project/.../data/scheduler.db 를 쓴다."""
+    norm = url.replace("\\", "/")
+    if not norm.startswith("sqlite:"):
+        return False
+    return "/opt/render/project/" in norm and "data/scheduler.db" in norm
+
+
 def _ensure_render_uses_durable_database_or_exit() -> None:
     """Render에서 비영구 SQLite로 뜨는 경우 기동을 막아 DB 유실을 줄인다."""
     if not _is_render():
@@ -248,6 +256,12 @@ def _ensure_render_uses_durable_database_or_exit() -> None:
         logger.warning(
             "Render + SQLite(영구 볼륨 경로): /data 또는 /app/data 에 Persistent Disk 가 "
             "마운트되어 있어야 재배포 후에도 데이터가 남습니다. 디스크 없으면 Postgres(render.yaml)을 권장합니다."
+        )
+        return
+    if _is_render_native_project_sqlite(DATABASE_URL):
+        logger.warning(
+            "Render Native(Python) + 프로젝트 폴더 SQLite — 재배포 시 DB가 비워질 수 있습니다. "
+            "영구 저장은 Environment 에 PostgreSQL DATABASE_URL 을 연결하세요."
         )
         return
     if os.environ.get("RENDER_ALLOW_SQLITE", "").strip().lower() in (
@@ -290,6 +304,12 @@ def _enforce_persistent_storage_or_exit() -> None:
         return
     norm = u.replace("\\", "/")
     if norm.startswith("sqlite:////data") or norm.startswith("sqlite:////app/data"):
+        return
+    if _is_render() and _is_render_native_project_sqlite(u):
+        logger.warning(
+            "Render Native 빌드: /opt/render/project/.../data/scheduler.db 사용 중입니다. "
+            "Docker(/data 볼륨) 또는 PostgreSQL 이 아니면 기동은 허용하지만 데이터 유지는 PostgreSQL 을 권장합니다."
+        )
         return
     in_cloud = bool(os.environ.get("FLY_APP_NAME")) or _is_render()
     in_docker = Path("/.dockerenv").exists()
