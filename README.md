@@ -54,11 +54,46 @@ docker compose up --build -d
 
 브라우저: http://localhost:8000
 
+## 로컬 터미널에서 실행 (`uvicorn`)
+
+저장소 **루트**에서:
+
+```bash
+pip install -r requirements.txt
+```
+
+권장 — **모든 네트워크 인터페이스**에 바인딩해, 같은 Wi‑Fi의 휴대폰에서 `http://<PC의-IP>:8000` 으로도 접속할 수 있습니다.
+
+- **Windows (PowerShell):** `.\run_local.ps1`
+- **macOS / Linux / Git Bash:** `chmod +x run_local.sh && ./run_local.sh`
+
+수동 실행 예:
+
+```bash
+py -3 -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+`--host 127.0.0.1` 만 쓰면 **그 PC 안의 브라우저**에서만 열리고, 터미널에 “접속이 안 된다”고 느끼는 경우(휴대폰·다른 기기)는 `0.0.0.0` 이 필요합니다.
+
+Google 로그인을 쓰려면 **프로젝트 루트에 `.env`** 파일이 필요합니다. `.env.example`을 복사한 뒤 값을 채우세요 (커밋하지 마세요).
+
+- **`FIREBASE_WEB_API_KEY`**, **`FIREBASE_AUTH_DOMAIN`**, **`FIREBASE_PROJECT_ID`** — Firebase Console → 프로젝트 설정 → 일반 → 웹 앱 SDK 설정  
+- **서비스 계정 JSON** — `FIREBASE_CREDENTIALS_JSON`(전체 JSON 문자열) 또는 `GOOGLE_APPLICATION_CREDENTIALS`(파일 경로)
+
+앱은 기동 시 **프로젝트 루트의 `.env`** 를 자동으로 읽습니다 (`python-dotenv`). `.env`가 없거나 Firebase 변수가 비어 있으면 로그인 화면에 설정 안내가 뜹니다.
+
+세션 쿠키용으로 **`SESSION_SECRET_KEY`** 또는 **`SECRET_KEY`** 도 로컬에서 설정하는 것을 권장합니다.
+
+**서버에서는 되는데 터미널(로컬)만 안 되는 경우:** Render `.env`에 **`SESSION_COOKIE_SECURE=true`** 가 있으면 로컬 **`http://`** 에서 세션 쿠키가 막힙니다. 앱은 **`RENDER` 등 배포 환경 변수가 없을 때** 이 값을 **자동으로 무시**합니다. 그래도 안 되면 `.env`에 **`LOCAL_DEV=1`** 또는 **`SESSION_COOKIE_SECURE=false`** 를 넣으세요. 로컬에서만 HTTPS+Secure 쿠키를 꼭 써야 하면 **`FORCE_SECURE_SESSION=1`** 과 함께 `SESSION_COOKIE_SECURE=true` 를 설정하세요.
+
+**Google 팝업 후 오류:** Firebase Console → Authentication → 설정 → **승인된 도메인**에 `localhost` 와 `127.0.0.1` 추가. (Google Cloud에서 API 키를 **HTTP 리퍼러로만** 제한했다면 `localhost` 출처를 허용하는지도 확인하세요.)
+
 ## DB(회원·스케줄)가 모이는 위치
 
 | 실행 방식 | 데이터가 쌓이는 곳 | 배포·재시작 후 유지 |
 |-----------|---------------------|---------------------|
 | **로컬** (`uvicorn`만, `DATABASE_URL` 없음) | 프로젝트 루트 **`data/scheduler.db`** | PC에 파일이 남으면 유지. 예전 루트 `scheduler.db`만 있으면 첫 기동 시 `data/`로 복사 시도. |
+| **로컬·단일 파일 고정** | **`HAN_SQLITE_FILE`**(또는 `SCHEDULER_SQLITE_FILE`)에 **절대 경로** | `DATABASE_URL`을 안 주고 이것만 주면 그 파일 하나를 DB로 씁니다. **프로젝트 밖**(예: 내 문서 폴더)에 두면 소스 업데이트와 분리됩니다. `DATABASE_URL`을 같이 쓰면 **항상 `DATABASE_URL`이 우선**입니다. |
 | **Docker Compose** | 호스트 **`./data/scheduler.db`** ↔ 컨테이너 `/data/scheduler.db` | `./data`를 마운트하므로 **이미지를 다시 빌드해도 DB는 유지**됩니다. |
 | **Fly.io + SQLite** | 볼륨에 붙은 **`/data/scheduler.db`** | **`fly.toml`의 `[mounts]` + `fly volumes create`** 가 없으면 매 배포마다 새 컨테이너 디스크라 **데이터가 비는 것과 같습니다.** |
 | **Render + PostgreSQL** | 관리형 Postgres (파일 경로 아님) | Blueprint의 `DATABASE_URL`이 Postgres를 가리키면 **재배포해도 데이터 유지**가 기본입니다. |

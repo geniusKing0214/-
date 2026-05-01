@@ -98,6 +98,48 @@ def firebase_google_login_ready() -> bool:
     return init_firebase_admin()
 
 
+def log_firebase_configuration_hints() -> None:
+    """터미널·배포 로그에서 무엇이 빠졌는지 바로 보이게 한다."""
+    web_missing: list[str] = []
+    if not (
+        os.environ.get("FIREBASE_WEB_API_KEY", "").strip()
+        or os.environ.get("FIREBASE_API_KEY", "").strip()
+    ):
+        web_missing.append("FIREBASE_WEB_API_KEY")
+    if not os.environ.get("FIREBASE_AUTH_DOMAIN", "").strip():
+        web_missing.append("FIREBASE_AUTH_DOMAIN")
+    if not os.environ.get("FIREBASE_PROJECT_ID", "").strip():
+        web_missing.append("FIREBASE_PROJECT_ID")
+
+    sa_raw = any(
+        os.environ.get(k, "").strip()
+        for k in ("FIREBASE_CREDENTIALS_JSON", "FIREBASE_SERVICE_ACCOUNT_JSON", "FIREBASE_JSON")
+    )
+    gac = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS", "").strip()
+    gac_ok = bool(gac and os.path.isfile(gac))
+    sa_missing = not sa_raw and not gac_ok
+
+    if web_missing:
+        logger.warning(
+            "Firebase 웹 SDK 환경 변수가 비어 있습니다: %s — Firebase Console → 프로젝트 설정 → "
+            "일반 → 내 앱(웹) SDK 에서 복사해 .env 또는 Render Environment 에 넣으세요.",
+            ", ".join(web_missing),
+        )
+    if sa_missing:
+        logger.warning(
+            "Firebase 서비스 계정이 없습니다. Firebase Console → 프로젝트 설정 → 서비스 계정 → "
+            "새 비공개 키 생성(JSON). Render 면 FIREBASE_CREDENTIALS_JSON 에 JSON 전체를 한 줄로, "
+            "로컬이면 GOOGLE_APPLICATION_CREDENTIALS=파일경로 를 쓰세요.",
+        )
+    elif sa_raw:
+        info = _load_service_account_dict()
+        if not info:
+            logger.warning(
+                "Firebase 서비스 계정 JSON 이 인식되지 않습니다. FIREBASE_*_JSON 값이 "
+                "올바른 JSON 한 덩어리인지(따옴표 이스케이프) 확인하세요."
+            )
+
+
 def verify_firebase_id_token(id_token: str) -> dict[str, Any]:
     from firebase_admin import auth
 

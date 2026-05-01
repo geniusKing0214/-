@@ -225,6 +225,44 @@ def _is_render() -> bool:
     return os.environ.get("RENDER", "").lower() in ("true", "1", "yes")
 
 
+def _ensure_render_uses_durable_database_or_exit() -> None:
+    """Render에서 비영구 SQLite로 뜨는 경우 기동을 막아 DB 유실을 줄인다."""
+    if not _is_render():
+        return
+    if DATABASE_URL.startswith("postgresql"):
+        logger.info(
+            "Render + PostgreSQL: 재배포 후에도 회원·일정 데이터는 이 DATABASE_URL 의 DB에 유지됩니다."
+        )
+        return
+    norm = DATABASE_URL.replace("\\", "/")
+    if norm.startswith("sqlite:////data") or norm.startswith("sqlite:////app/data"):
+        logger.warning(
+            "Render + SQLite(영구 볼륨 경로): /data 또는 /app/data 에 Persistent Disk 가 "
+            "마운트되어 있어야 재배포 후에도 데이터가 남습니다. 디스크 없으면 Postgres(render.yaml)을 권장합니다."
+        )
+        return
+    if os.environ.get("RENDER_ALLOW_SQLITE", "").strip().lower() in (
+        "1",
+        "true",
+        "yes",
+    ):
+        logger.warning(
+            "RENDER_ALLOW_SQLITE=1 — Render에서 SQLite를 허용했습니다. "
+            "컨테이너 로컬 디스크만 쓰면 재배포 시 데이터가 사라질 수 있습니다."
+        )
+        return
+    logger.critical(
+        "Render 배포: 데이터 유실을 막으려면 PostgreSQL DATABASE_URL 을 연결하세요.\n"
+        "  • Dashboard → PostgreSQL → 웹 서비스 Environment 의 DATABASE_URL 에 내부 URL 연결\n"
+        "  • 또는 render.yaml Blueprint 로 Postgres 포함 배포\n"
+        "그 외 SQLite는 컨테이너 재생성 시 비워질 수 있습니다. "
+        "임시로만 허용하려면 Environment 에 RENDER_ALLOW_SQLITE=1\n"
+        "현재 DATABASE_URL=%r",
+        DATABASE_URL,
+    )
+    raise SystemExit(4)
+
+
 def _enforce_persistent_storage_or_exit() -> None:
     """Docker/Fly/Render에서 비영구 SQLite로 뜨면 기동 자체를 막아 유실을 예방."""
     if os.environ.get("ALLOW_EPHEMERAL_SQLITE", "").strip().lower() in (
@@ -319,6 +357,7 @@ def _ensure_sqlite_parent_dir(url: str) -> None:
 
 _ensure_sqlite_parent_dir(DATABASE_URL)
 _enforce_persistent_storage_or_exit()
+_ensure_render_uses_durable_database_or_exit()
 
 
 def _engine_kwargs(url: str) -> dict:

@@ -1,5 +1,18 @@
 from __future__ import annotations
 
+# 프로젝트 루트 .env → (없으면) 현재 작업 폴더 .env (터미널 uvicorn 용)
+from pathlib import Path as _Path_dotenv
+
+_project_root = _Path_dotenv(__file__).resolve().parent.parent
+try:
+    from dotenv import load_dotenv
+
+    load_dotenv(_project_root / ".env")
+    # 루트에 없는 키만 cwd 의 .env 로 채움 (서버와 동일 복사본을 한 곳에만 둔 경우)
+    load_dotenv(_Path_dotenv.cwd() / ".env", override=False)
+except ImportError:
+    pass
+
 import calendar as calendar_mod
 import logging
 import os
@@ -28,6 +41,7 @@ from app.database import (
 from app.firebase_init import (
     firebase_google_login_ready,
     get_firebase_web_config,
+    log_firebase_configuration_hints,
     verify_firebase_id_token,
 )
 from app.models import (
@@ -53,17 +67,64 @@ _session_secret = (
     or (os.environ.get("SECRET_KEY") or "").strip()
     or "change-this-secret-key"
 )
-_session_https_only = os.environ.get("SESSION_COOKIE_SECURE", "").strip().lower() in (
-    "1",
-    "true",
-    "yes",
-)
+
+
+def _env_truthy(key: str) -> bool:
+    return os.environ.get(key, "").strip().lower() in ("1", "true", "yes")
+
+
+def _looks_like_deploy_platform() -> bool:
+    """Render/Fly 등 배포 환경에서만 True (로컬 터미널 uvicorn 은 보통 비어 있음)."""
+    keys = (
+        "RENDER",
+        "FLY_APP_NAME",
+        "RAILWAY_ENVIRONMENT",
+        "RAILWAY_PROJECT_ID",
+        "K_SERVICE",
+        "AWS_EXECUTION_ENV",
+    )
+    return any(os.environ.get(k, "").strip() for k in keys)
+
+
+# 서버(HTTPS): SESSION_COOKIE_SECURE=true 권장.
+# 로컬 http:// : Secure 쿠키는 브라우저가 저장하지 않아 로그인·접속이 안 되는 것처럼 보임.
+# Render .env 를 그대로 복사한 경우 → 배포 플랫폼 변수가 없으면 Secure 를 자동 끔.
+_local_dev = _env_truthy("LOCAL_DEV") or _env_truthy("SCHEDULER_LOCAL_DEV")
+_force_secure_session = _env_truthy("FORCE_SECURE_SESSION")
+_session_https_only_env = _env_truthy("SESSION_COOKIE_SECURE")
+_deploy = _looks_like_deploy_platform()
+
+if _local_dev:
+    _session_https_only = False
+elif _deploy:
+    _session_https_only = _session_https_only_env
+elif _session_https_only_env and _force_secure_session:
+    _session_https_only = True
+elif _session_https_only_env:
+    logger.warning(
+        "로컬(터미널) 실행으로 보입니다. SESSION_COOKIE_SECURE=true 는 http 접속 시 "
+        "세션 쿠키를 막습니다. 비활성화했습니다. HTTPS 로컬만 필요하면 FORCE_SECURE_SESSION=1 "
+        "또는 배포 환경에서 실행하세요."
+    )
+    _session_https_only = False
+else:
+    _session_https_only = False
+
 app.add_middleware(
     SessionMiddleware,
     secret_key=_session_secret,
     same_site="lax",
     https_only=_session_https_only,
 )
+
+if _local_dev and _session_https_only_env:
+    logger.warning(
+        "LOCAL_DEV=1: SESSION_COOKIE_SECURE 는 무시하고 로컬(http)용 세션 쿠키를 씁니다. "
+        "배포 서버에는 LOCAL_DEV 를 넣지 마세요."
+    )
+
+if not firebase_google_login_ready():
+    log_firebase_configuration_hints()
 
 
 def _safe_internal_redirect_path(raw: Optional[str]) -> Optional[str]:
