@@ -6,7 +6,7 @@ import sqlite3
 import time
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 from sqlalchemy import create_engine, event, inspect, text
 from sqlalchemy.orm import sessionmaker, declarative_base
@@ -259,11 +259,26 @@ def _ensure_render_uses_durable_database_or_exit() -> None:
         )
         return
     if _is_render_native_project_sqlite(DATABASE_URL):
-        logger.warning(
-            "Render Native(Python) + 프로젝트 폴더 SQLite — 재배포 시 DB가 비워질 수 있습니다. "
-            "영구 저장은 Environment 에 PostgreSQL DATABASE_URL 을 연결하세요."
+        if os.environ.get("RENDER_ALLOW_SQLITE", "").strip().lower() in (
+            "1",
+            "true",
+            "yes",
+        ):
+            logger.warning(
+                "RENDER_ALLOW_SQLITE=1 — Render Native의 프로젝트 폴더 SQLite는 "
+                "재배포 시 데이터가 사라질 수 있습니다. PostgreSQL DATABASE_URL 연결을 권장합니다."
+            )
+            return
+        logger.critical(
+            "Render Native(Python)는 저장소 안의 SQLite 파일을 쓰며, 재배포마다 새 컨테이너가 되어 "
+            "회원·일정 DB가 비워집니다.\n"
+            "  • PostgreSQL 생성 후 웹 서비스 Environment에 DATABASE_URL(Internal) 연결 — 저장소 루트 render.yaml 참고\n"
+            "  • 또는 Docker 런타임 + Persistent Disk를 /data에 마운트하고 DATABASE_URL=sqlite:////data/scheduler.db\n"
+            "임시로만 기존 SQLite를 허용하려면 RENDER_ALLOW_SQLITE=1 (비권장, 데이터 유실 가능)\n"
+            "현재 DATABASE_URL=%r",
+            DATABASE_URL,
         )
-        return
+        raise SystemExit(4)
     if os.environ.get("RENDER_ALLOW_SQLITE", "").strip().lower() in (
         "1",
         "true",
@@ -442,6 +457,61 @@ SessionLocal = sessionmaker(
 atexit.register(_sqlite_shutdown_backup)
 
 Base = declarative_base()
+
+
+def persistence_summary() -> dict[str, Any]:
+    """운영 진단용(/health). 자격 증명·호스트 등 연결 문자열은 노출하지 않는다."""
+    u = DATABASE_URL
+    if u.startswith("postgresql"):
+        return {
+            "backend": "postgresql",
+            "survives_deploy": True,
+            "note": "회원·일정 데이터는 이 PostgreSQL 인스턴스에 저장되며, 일반적으로 재배포 후에도 유지됩니다.",
+        }
+    if not u.startswith("sqlite"):
+        return {
+            "backend": "other",
+            "survives_deploy": None,
+            "note": "DATABASE_URL 형식을 확인하세요.",
+        }
+    norm = u.replace("\\", "/")
+    uses_vol = norm.startswith("sqlite:////data") or norm.startswith("sqlite:////app/data")
+    if uses_vol:
+        return {
+            "backend": "sqlite",
+            "survives_deploy": None,
+            "note": (
+                "SQLite가 /data 또는 /app/data 를 가리킵니다. "
+                "클라우드에서는 해당 경로에 Persistent Disk가 마운트되어 있어야 재배포 후에도 유지됩니다. "
+                "디스크 없이 기본 컨테이너 파일만 쓰면 매 배포마다 DB가 비어 보일 수 있습니다. "
+                "가장 단순한 해결은 Render PostgreSQL의 DATABASE_URL 연결입니다."
+            ),
+        }
+    if _is_render() and _is_render_native_project_sqlite(u):
+        return {
+            "backend": "sqlite",
+            "survives_deploy": False,
+            "note": (
+                "Render Native 빌드의 프로젝트 폴더 SQLite는 재배포할 때마다 데이터가 사라질 수 있습니다. "
+                "웹 서비스 Environment에 PostgreSQL의 DATABASE_URL을 연결하세요."
+            ),
+        }
+    in_cloud = bool(os.environ.get("FLY_APP_NAME")) or _is_render() or Path("/.dockerenv").exists()
+    if in_cloud:
+        return {
+            "backend": "sqlite",
+            "survives_deploy": False,
+            "note": (
+                "클라우드에서 영구 볼륨 경로(/data 등)가 아닌 SQLite입니다. "
+                "재배포·컨테이너 교체 시 회원·일정이 유실될 수 있습니다. "
+                "PostgreSQL DATABASE_URL 연결을 권장합니다."
+            ),
+        }
+    return {
+        "backend": "sqlite",
+        "survives_deploy": True,
+        "note": "로컬 프로젝트의 SQLite 파일입니다(재배포와 무관하게 파일에 유지).",
+    }
 
 
 def ensure_sqlite_migrations(engine) -> None:

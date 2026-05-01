@@ -37,6 +37,7 @@ from app.database import (
     ensure_schedule_application_status_migration,
     ensure_sqlite_migrations,
     ensure_users_is_admin_coercion,
+    persistence_summary,
 )
 from app.firebase_init import (
     firebase_google_login_ready,
@@ -2167,4 +2168,6 @@ def move_application(
 
 @app.get("/health")
 def health():
-    return {"ok": True}
+    """배포 진단: `database` 필드로 데이터가 재배포 후에도 남는 설정인지 확인하세요."""
+    body: dict[str, Any] = {"ok": True, "database": persistence_summary()}
+    return body

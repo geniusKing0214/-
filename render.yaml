@@ -27,6 +27,12 @@ services:
     dockerfilePath: ./Dockerfile
     dockerContext: .
     healthCheckPath: /health
+    # 위 DATABASE_URL(fromDatabase)로 PostgreSQL을 쓰면 재배포 후에도 데이터가 유지됩니다. 디스크 불필요.
+    # Postgres 없이 Docker 이미지 기본값(SQLite @ /data)만 쓸 경우에만 Persistent Disk 추가:
+    # disk:
+    #   name: scheduler-data
+    #   mountPath: /data
+    #   sizeGB: 1
     envVars:
       - key: DATABASE_URL
         fromDatabase:
