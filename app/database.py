@@ -214,7 +214,16 @@ def _normalize_database_url(raw: str) -> str:
     return s
 
 
-_raw_database_url = os.environ.get("DATABASE_URL", _default_url)
+# 빈 문자열 DATABASE_URL= 은 Render 등에서 이미지 기본값을 덮어써 기동 실패·스테일 URL을 만든다.
+_env_db_raw = os.environ.get("DATABASE_URL")
+_env_db = (_env_db_raw or "").strip()
+_render_boot = str(os.environ.get("RENDER", "")).strip().lower() in ("true", "1", "yes")
+if _env_db:
+    _raw_database_url = _env_db
+elif _render_boot and Path("/.dockerenv").exists():
+    _raw_database_url = "sqlite:////data/scheduler.db"
+else:
+    _raw_database_url = _default_url
 DATABASE_URL = _normalize_database_url(_raw_database_url)
 
 _migrate_legacy_root_sqlite_if_using_default()
