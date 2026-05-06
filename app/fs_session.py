@@ -284,12 +284,6 @@ class FSQuery:
             return self._dao.iter_schedule_applications()
         return []
 
-    def _wants_slots(self) -> bool:
-        for o in self._loads:
-            if "slots" in str(o):
-                return True
-        return False
-
     def _attach_event_slots(self, events: list[Any]) -> None:
         all_slots = self._dao.iter_slots()
         by_eid: dict[int, list[Any]] = {}
@@ -538,7 +532,10 @@ class FSQuery:
 
         rows = self._sort_rows(rows, model)
 
-        if model is Event and self._wants_slots():
+        # Postgres(SQLAlchemy)는 joinedload(Event.slots)로 항상 채워지지만,
+        # Firestore 경로에서는 로더 옵션 문자열에 "slots"가 안 잡혀 빠지는 경우가 있어
+        # Event 조회마다 슬롯을 붙인다(홈 일정·슬롯 신청 UI).
+        if model is Event:
             self._attach_event_slots(rows)
 
         if model is Application:
