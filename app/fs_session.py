@@ -597,9 +597,11 @@ class FSSession:
         oid = getattr(obj, "id", None)
         if oid is None:
             return
-        colname = MODEL_COUNTER_FIELD.get(type(obj))
+        cls = type(obj)
+        colname = MODEL_COUNTER_FIELD.get(cls)
         if colname:
             self._deleted.setdefault(colname, set()).add(int(oid))
+            self._identity_map.pop((cls, int(oid)), None)
 
     def flush(self) -> None:
         """PK 할당만 수행. 실제 Firestore 쓰기는 commit()에서 일괄 처리."""

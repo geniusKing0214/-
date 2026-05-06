@@ -83,6 +83,13 @@
                 <button type="submit" class="btn btn-primary full sched-submit">변경 저장</button>
             </div>
         </form>
+        <div class="sched-admin-delete-block" role="region" aria-labelledby="admin-delete-h">
+            <h2 id="admin-delete-h" class="sched-admin-delete-title">스케줄 전체 삭제</h2>
+            <p class="sched-hint">이 이벤트와 연결된 모든 시간 슬롯·신청 기록이 함께 삭제됩니다.</p>
+            <form method="post" action="/admin/events/{{ event.id }}/delete" class="sched-admin-delete-form" onsubmit="return confirm('이 스케줄 전체를 삭제할까요? 모든 슬롯과 신청 내역이 지워지며 되돌릴 수 없습니다.');">
+                <button type="submit" class="btn btn-danger">이 스케줄 삭제</button>
+            </form>
+        </div>
     </section>
     <script>
     (function () {

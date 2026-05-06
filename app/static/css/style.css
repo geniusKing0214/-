@@ -1030,6 +1030,13 @@ textarea {
     margin: 0;
 }
 
+.admin-event-actions .inline-form,
+.admin-event-delete-form {
+    display: inline-flex;
+    margin: 0;
+    align-items: center;
+}
+
 @media (max-width: 900px) {
     .admin-event-row {
         flex-wrap: nowrap;
@@ -2438,6 +2445,23 @@ button.btn-google:hover {
 
 .sched-create-page .sched-edit-actions {
     margin-top: 18px;
+}
+
+.sched-create-page .sched-admin-delete-block {
+    margin-top: 28px;
+    padding-top: 22px;
+    border-top: 1px solid rgba(252, 165, 165, 0.45);
+}
+
+.sched-create-page .sched-admin-delete-title {
+    font-size: 1rem;
+    font-weight: 700;
+    margin: 0 0 8px;
+    color: #991b1b;
+}
+
+.sched-create-page .sched-admin-delete-form {
+    margin-top: 12px;
 }
 
 .sched-create-page .sched-slot-remove.is-disabled,

@@ -40,10 +40,13 @@
                     검토 대기 <strong>{{ st.pending }}</strong>명
                     · 신청 중 <strong>{{ st.pending + st.approved }}</strong>명
                 </span>
-                <span class="admin-event-actions">
+                <div class="admin-event-actions">
                     <a href="/admin/events/{{ event.id }}/edit" class="btn btn-outline btn-sm">수정</a>
                     <a href="/admin/operations" class="btn btn-primary btn-sm"><span class="admin-btn-long">신청자 관리</span><span class="admin-btn-short">관리</span></a>
-                </span>
+                    <form method="post" action="/admin/events/{{ event.id }}/delete" class="inline-form admin-event-delete-form" onsubmit="return confirm('이 스케줄과 모든 시간 슬롯·신청 기록을 삭제할까요?\n이 작업은 되돌릴 수 없습니다.');">
+                        <button type="submit" class="btn btn-danger btn-sm">삭제</button>
+                    </form>
+                </div>
             </li>
             {% endfor %}
         </ul>
