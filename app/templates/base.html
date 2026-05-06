@@ -7,8 +7,9 @@
     <title>{{ page_title }} | HAN Scheduler</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/css/style.css?v=20260505">
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Noto+Sans+KR:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="icon" type="image/png" href="/static/branding/han-agency-mark.png">
+    <link rel="stylesheet" href="/static/css/style.css?v=20260506b">
 </head>
 <body>
     <div class="nav-mobile-backdrop" id="navMobileBackdrop" hidden aria-hidden="true"></div>
@@ -16,7 +17,10 @@
     <div class="site-header-wrap">
         <header class="topbar cute-topbar">
             <div class="topbar-inner">
-                <a href="/" class="logo"><span class="logo-icon" aria-hidden="true">📅</span><span class="logo-text">HAN Scheduler</span></a>
+                <a href="/" class="logo" aria-label="HAN Scheduler 홈으로">
+                    <img class="logo-image" src="/static/branding/han-scheduler-wordmark.png" alt="HAN Scheduler">
+                    <span class="logo-text">HAN Scheduler</span>
+                </a>
 
                 <div class="topbar-end">
                     {% if current_user %}

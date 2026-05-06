@@ -95,30 +95,33 @@ textarea {
 .logo {
     display: inline-flex;
     align-items: center;
-    gap: 10px;
-    font-size: 1.15rem;
-    font-weight: 800;
-    letter-spacing: -0.03em;
+    gap: 8px;
     color: var(--cute-primary-dark);
-    transition: color 0.2s ease, transform 0.2s ease;
+    transition: filter 0.2s ease, transform 0.2s ease;
+    min-width: 0;
 }
 
 .logo:hover {
-    color: var(--cute-primary);
     transform: scale(1.02);
+    filter: brightness(1.04);
 }
 
-.logo-icon {
-    font-size: 1.4rem;
-    line-height: 1;
-    filter: drop-shadow(0 2px 6px rgba(124, 58, 237, 0.28));
+.logo-image {
+    display: block;
+    height: 34px;
+    width: auto;
+    max-width: min(300px, 56vw);
+    object-fit: contain;
 }
 
 .logo-text {
-    background: linear-gradient(120deg, #5b21b6, #7c3aed, #c026d3);
-    -webkit-background-clip: text;
-    background-clip: text;
-    color: transparent;
+    font-family: "Cinzel", "Noto Sans KR", serif;
+    font-size: 1.05rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    color: #6d28d9;
+    white-space: nowrap;
+    display: none;
 }
 
 /* 가로 나열 .nav → 햄버거 메뉴(.nav-panel)로 대체 (base.html) */
@@ -365,6 +368,11 @@ body.nav-menu-open {
 @media (max-width: 640px) {
     .logo {
         min-width: 0;
+    }
+
+    .logo-image {
+        height: 30px;
+        max-width: min(220px, 60vw);
     }
 
     .nav-user-topbar {
@@ -651,6 +659,12 @@ textarea {
     align-items: center;
     margin-bottom: 24px;
     gap: 12px;
+}
+
+.page-header h1,
+.sched-title {
+    font-family: "Cinzel", "Noto Sans KR", serif;
+    letter-spacing: -0.01em;
 }
 
 .card-list {
