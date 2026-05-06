@@ -11,6 +11,21 @@
     --cute-muted: #64748b;
     --cute-shadow: 0 8px 32px rgba(124, 58, 237, 0.08);
     --cute-shadow-sm: 0 4px 20px rgba(15, 23, 42, 0.06);
+    /* 달력 “일정 있음” 점 — 라이트 모드 */
+    --sched-dot-from: #7c3aed;
+    --sched-dot-to: #c026d3;
+    --sched-dot-ring: rgba(255, 255, 255, 0.7);
+    --sched-dot-glow: 0 0 0 1px rgba(91, 33, 182, 0.18);
+}
+
+@media (prefers-color-scheme: dark) {
+    :root {
+        /* 다크 모드: 어두운 배경에서도 선명하게(밝은 보라·핑크 + 테두리·약한 발광) */
+        --sched-dot-from: #e9d5ff;
+        --sched-dot-to: #f0abfc;
+        --sched-dot-ring: rgba(0, 0, 0, 0.45);
+        --sched-dot-glow: 0 0 0 1.5px rgba(255, 255, 255, 0.55), 0 0 8px rgba(232, 121, 249, 0.55);
+    }
 }
 
 html,
@@ -1975,7 +1990,10 @@ button.btn-google:hover {
     width: 5px;
     height: 5px;
     border-radius: 50%;
-    background: linear-gradient(135deg, #a78bfa, #e879f9);
+    background: linear-gradient(135deg, var(--sched-dot-from), var(--sched-dot-to));
+    box-shadow: var(--sched-dot-glow);
+    /* 일부 브라우저 강제 다크에서 색이 뭉개지지 않도록 */
+    forced-color-adjust: none;
 }
 
 .sched-sel-banner {
