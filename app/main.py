@@ -1801,27 +1801,6 @@ def admin_operations(request: Request, db: Session = Depends(get_db)):
     approved_count = sum(1 for item in applications if item.status == "approved")
     rejected_count = sum(1 for item in applications if item.status == "rejected")
 
-    member_schedule_apps = (
-        db.query(ScheduleApplication)
-        .options(
-            joinedload(ScheduleApplication.user),
-            joinedload(ScheduleApplication.schedule),
-        )
-        .order_by(ScheduleApplication.applied_at.desc())
-        .all()
-    )
-    ms_pending = [a for a in member_schedule_apps if a.status == "pending"]
-    ms_approved = [a for a in member_schedule_apps if a.status == "approved"]
-    ms_rejected = [a for a in member_schedule_apps if a.status == "rejected"]
-    ms_other = [
-        a
-        for a in member_schedule_apps
-        if a.status not in ("pending", "approved", "rejected")
-    ]
-    ms_pending_count = len(ms_pending)
-    ms_approved_count = len(ms_approved)
-    ms_rejected_count = len(ms_rejected)
-
     return render(
         request,
         "admin_operations.html",
@@ -1836,13 +1815,6 @@ def admin_operations(request: Request, db: Session = Depends(get_db)):
             "pending_count": pending_count,
             "approved_count": approved_count,
             "rejected_count": rejected_count,
-            "ms_pending": ms_pending,
-            "ms_approved": ms_approved,
-            "ms_rejected": ms_rejected,
-            "ms_other": ms_other,
-            "ms_pending_count": ms_pending_count,
-            "ms_approved_count": ms_approved_count,
-            "ms_rejected_count": ms_rejected_count,
         },
         db,
         current_user=admin,

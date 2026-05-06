@@ -38,7 +38,6 @@
     <nav class="admin-ops-quicknav" aria-label="운영 페이지 구역 이동">
         <a href="#ops-members" class="admin-ops-quicknav-link">회원 승인</a>
         <a href="#ops-slots" class="admin-ops-quicknav-link">이벤트 슬롯</a>
-        <a href="#ops-extra" class="admin-ops-quicknav-link">별도 일정 신청</a>
     </nav>
 
     <div class="admin-ops-dashboard" role="region" aria-label="처리 현황 요약">
@@ -57,18 +56,6 @@
         <div class="admin-ops-stat-card">
             <span class="admin-ops-stat-label">슬롯 · 거절</span>
             <strong class="admin-ops-stat-value">{{ rejected_count }}</strong>
-        </div>
-        <div class="admin-ops-stat-card admin-ops-stat-card--warn">
-            <span class="admin-ops-stat-label">별도 일정 · 대기</span>
-            <strong class="admin-ops-stat-value">{{ ms_pending_count }}</strong>
-        </div>
-        <div class="admin-ops-stat-card">
-            <span class="admin-ops-stat-label">별도 일정 · 승인</span>
-            <strong class="admin-ops-stat-value">{{ ms_approved_count }}</strong>
-        </div>
-        <div class="admin-ops-stat-card">
-            <span class="admin-ops-stat-label">별도 일정 · 거절</span>
-            <strong class="admin-ops-stat-value">{{ ms_rejected_count }}</strong>
         </div>
     </div>
 
@@ -269,162 +256,5 @@
         {% endif %}
     </section>
 
-    <section class="app-group admin-ops-section" id="ops-extra" aria-labelledby="ops-extra-h">
-        <h2 class="app-group-title" id="ops-extra-h">별도 일정(모집) 신청</h2>
-        <p class="sched-hint admin-ops-hint">회원이 홈·별도 일정 메뉴에서 신청한 내역입니다. 대기 건만 승인·거절할 수 있습니다.</p>
-
-        <details class="admin-ops-fold" open>
-            <summary class="admin-ops-fold-summary">
-                <span class="admin-ops-fold-title">검토 대기</span>
-                <span class="badge warning">{{ ms_pending|length }}건</span>
-            </summary>
-            <div class="admin-ops-fold-body">
-                {% if ms_pending %}
-                <div class="table-scroll admin-ops-table-wrap">
-                    <table class="admin-ops-table">
-                        <thead>
-                            <tr>
-                                <th scope="col">일정</th>
-                                <th scope="col">일시</th>
-                                <th scope="col">회원</th>
-                                <th scope="col">신청 시각</th>
-                                <th scope="col" class="admin-ops-col-actions">처리</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for sa in ms_pending %}
-                            <tr>
-                                <td title="{{ sa.schedule.title }}">{{ sa.schedule.title }}</td>
-                                <td class="admin-ops-cell-nowrap">{{ sa.schedule.event_datetime.strftime("%Y-%m-%d %H:%M") }}</td>
-                                <td>{{ display_name(sa.user) }}</td>
-                                <td class="admin-ops-cell-muted">{{ sa.applied_at.strftime("%m-%d %H:%M") if sa.applied_at else "—" }}</td>
-                                <td class="admin-ops-col-actions">
-                                    <div class="admin-ops-app-actions">
-                                        <form method="post" action="/admin/member-schedule-applications/{{ sa.id }}/approve" class="inline-form">
-                                            <button type="submit" class="btn btn-primary btn-sm">승인</button>
-                                        </form>
-                                        <form method="post" action="/admin/member-schedule-applications/{{ sa.id }}/reject" class="inline-form">
-                                            <button type="submit" class="btn btn-outline btn-sm">거절</button>
-                                        </form>
-                                    </div>
-                                </td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-                {% else %}
-                <div class="empty-box admin-ops-fold-empty">대기 중인 별도 일정 신청이 없습니다.</div>
-                {% endif %}
-            </div>
-        </details>
-
-        <details class="admin-ops-fold">
-            <summary class="admin-ops-fold-summary">
-                <span class="admin-ops-fold-title">승인됨</span>
-                <span class="badge success">{{ ms_approved|length }}건</span>
-            </summary>
-            <div class="admin-ops-fold-body">
-                {% if ms_approved %}
-                <div class="table-scroll admin-ops-table-wrap">
-                    <table class="admin-ops-table">
-                        <thead>
-                            <tr>
-                                <th scope="col">일정</th>
-                                <th scope="col">일시</th>
-                                <th scope="col">회원</th>
-                                <th scope="col">신청 시각</th>
-                                <th scope="col">상태</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for sa in ms_approved %}
-                            <tr>
-                                <td title="{{ sa.schedule.title }}">{{ sa.schedule.title }}</td>
-                                <td class="admin-ops-cell-nowrap">{{ sa.schedule.event_datetime.strftime("%Y-%m-%d %H:%M") }}</td>
-                                <td>{{ display_name(sa.user) }}</td>
-                                <td class="admin-ops-cell-muted">{{ sa.applied_at.strftime("%m-%d %H:%M") if sa.applied_at else "—" }}</td>
-                                <td><span class="badge success">승인</span></td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-                {% else %}
-                <div class="empty-box admin-ops-fold-empty">승인된 신청이 없습니다.</div>
-                {% endif %}
-            </div>
-        </details>
-
-        <details class="admin-ops-fold">
-            <summary class="admin-ops-fold-summary">
-                <span class="admin-ops-fold-title">거절됨</span>
-                <span class="badge danger">{{ ms_rejected|length }}건</span>
-            </summary>
-            <div class="admin-ops-fold-body">
-                {% if ms_rejected %}
-                <div class="table-scroll admin-ops-table-wrap">
-                    <table class="admin-ops-table">
-                        <thead>
-                            <tr>
-                                <th scope="col">일정</th>
-                                <th scope="col">일시</th>
-                                <th scope="col">회원</th>
-                                <th scope="col">신청 시각</th>
-                                <th scope="col">상태</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for sa in ms_rejected %}
-                            <tr>
-                                <td title="{{ sa.schedule.title }}">{{ sa.schedule.title }}</td>
-                                <td class="admin-ops-cell-nowrap">{{ sa.schedule.event_datetime.strftime("%Y-%m-%d %H:%M") }}</td>
-                                <td>{{ display_name(sa.user) }}</td>
-                                <td class="admin-ops-cell-muted">{{ sa.applied_at.strftime("%m-%d %H:%M") if sa.applied_at else "—" }}</td>
-                                <td><span class="badge danger">거절</span></td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-                {% else %}
-                <div class="empty-box admin-ops-fold-empty">거절된 신청이 없습니다.</div>
-                {% endif %}
-            </div>
-        </details>
-
-        {% if ms_other %}
-        <details class="admin-ops-fold">
-            <summary class="admin-ops-fold-summary">
-                <span class="admin-ops-fold-title">기타 (취소 등)</span>
-                <span class="badge">{{ ms_other|length }}건</span>
-            </summary>
-            <div class="admin-ops-fold-body">
-                <div class="table-scroll admin-ops-table-wrap">
-                    <table class="admin-ops-table">
-                        <thead>
-                            <tr>
-                                <th scope="col">일정</th>
-                                <th scope="col">일시</th>
-                                <th scope="col">회원</th>
-                                <th scope="col">상태</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for sa in ms_other %}
-                            <tr>
-                                <td title="{{ sa.schedule.title }}">{{ sa.schedule.title }}</td>
-                                <td class="admin-ops-cell-nowrap">{{ sa.schedule.event_datetime.strftime("%Y-%m-%d %H:%M") }}</td>
-                                <td>{{ display_name(sa.user) }}</td>
-                                <td><span class="badge">{{ sa.status }}</span></td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </details>
-        {% endif %}
-    </section>
 </div>
 {% endblock %}
