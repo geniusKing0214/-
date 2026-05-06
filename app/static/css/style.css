@@ -1394,6 +1394,214 @@ button.btn-google:hover {
     line-height: 1.45;
 }
 
+/* ---- 운영(/admin/operations) 레이아웃 ---- */
+.admin-ops-quicknav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 0 0 16px;
+    padding: 10px 12px;
+    position: sticky;
+    top: 0;
+    z-index: 3;
+    background: linear-gradient(
+        180deg,
+        rgba(250, 245, 255, 0.97) 0%,
+        rgba(252, 250, 255, 0.92) 100%
+    );
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(233, 213, 255, 0.55);
+    border-radius: 14px;
+    box-shadow: 0 4px 14px rgba(124, 58, 237, 0.06);
+}
+
+.admin-ops-quicknav-link {
+    font-size: 0.8125rem;
+    font-weight: 700;
+    padding: 8px 14px;
+    border-radius: 999px;
+    background: #fff;
+    color: var(--cute-primary-dark);
+    border: 1px solid rgba(233, 213, 255, 0.85);
+    text-decoration: none;
+    white-space: nowrap;
+}
+
+.admin-ops-quicknav-link:hover {
+    border-color: rgba(124, 58, 237, 0.35);
+    box-shadow: 0 2px 8px rgba(124, 58, 237, 0.12);
+}
+
+.admin-ops-dashboard {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
+    gap: 10px;
+    margin-bottom: 20px;
+}
+
+.admin-ops-stat-card {
+    padding: 12px 14px;
+    border-radius: 14px;
+    background: rgba(255, 255, 255, 0.95);
+    border: 1px solid rgba(233, 213, 255, 0.55);
+    box-shadow: var(--cute-shadow-sm);
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.admin-ops-stat-card--warn {
+    border-color: rgba(245, 158, 11, 0.35);
+    background: linear-gradient(145deg, rgba(255, 251, 235, 0.95), #fff);
+}
+
+.admin-ops-stat-label {
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: var(--cute-muted);
+    letter-spacing: -0.02em;
+    line-height: 1.25;
+}
+
+.admin-ops-stat-value {
+    font-size: 1.35rem;
+    font-weight: 800;
+    color: var(--cute-text);
+    letter-spacing: -0.03em;
+}
+
+.admin-ops-section {
+    scroll-margin-top: 96px;
+}
+
+.admin-ops-table-wrap {
+    margin-top: 8px;
+    border-radius: 14px;
+    border: 1px solid rgba(233, 213, 255, 0.45);
+    background: rgba(255, 255, 255, 0.98);
+}
+
+.admin-ops-table {
+    width: 100%;
+    min-width: 560px;
+    border-collapse: collapse;
+    font-size: 0.875rem;
+}
+
+.admin-ops-table th,
+.admin-ops-table td {
+    padding: 10px 12px;
+    text-align: left;
+    border-bottom: 1px solid rgba(15, 23, 42, 0.06);
+    vertical-align: middle;
+}
+
+.admin-ops-table th {
+    font-weight: 800;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--cute-muted);
+    background: rgba(124, 58, 237, 0.06);
+    white-space: nowrap;
+}
+
+.admin-ops-table tbody tr:hover {
+    background: rgba(124, 58, 237, 0.035);
+}
+
+.admin-ops-table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+.admin-ops-col-actions {
+    width: 1%;
+    white-space: nowrap;
+    text-align: right;
+}
+
+.admin-ops-cell-muted {
+    color: var(--cute-muted);
+    font-size: 0.8125rem;
+    white-space: nowrap;
+}
+
+.admin-ops-cell-nowrap {
+    white-space: nowrap;
+    font-size: 0.8125rem;
+}
+
+.admin-ops-fold {
+    margin-bottom: 12px;
+    border-radius: 14px;
+    border: 1px solid rgba(233, 213, 255, 0.55);
+    background: rgba(255, 255, 255, 0.65);
+    overflow: hidden;
+}
+
+.admin-ops-fold-summary {
+    list-style: none;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 16px;
+    cursor: pointer;
+    font-weight: 800;
+    font-size: 0.9rem;
+    color: var(--cute-primary-dark);
+    background: rgba(255, 255, 255, 0.92);
+    user-select: none;
+}
+
+.admin-ops-fold-summary::-webkit-details-marker {
+    display: none;
+}
+
+.admin-ops-fold-summary::before {
+    content: "▸";
+    display: inline-block;
+    font-size: 0.75rem;
+    color: var(--cute-muted);
+    transition: transform 0.15s ease;
+}
+
+.admin-ops-fold[open] > .admin-ops-fold-summary::before {
+    transform: rotate(90deg);
+}
+
+.admin-ops-fold-title {
+    flex: 1 1 auto;
+    min-width: 5em;
+}
+
+.admin-ops-fold-hint {
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: var(--cute-muted);
+    flex-basis: 100%;
+    margin-left: 1.25rem;
+}
+
+@media (min-width: 640px) {
+    .admin-ops-fold-hint {
+        flex-basis: auto;
+        margin-left: 0;
+    }
+}
+
+.admin-ops-fold-body {
+    padding: 0 12px 14px;
+}
+
+.admin-ops-fold-body .admin-ops-table-wrap {
+    margin-top: 0;
+}
+
+.admin-ops-fold-empty {
+    margin: 8px 0 4px;
+}
+
 .admin-ops-app-actions {
     display: flex;
     flex-wrap: wrap;

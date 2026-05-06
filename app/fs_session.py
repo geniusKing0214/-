@@ -307,8 +307,10 @@ class FSQuery:
 
     def _attach_schedule_application_refs(self, apps: list[Any]) -> None:
         sch = {s.id: s for s in self._dao.iter_schedules()}
+        users_map = {u.id: u for u in self._dao.iter_users()}
         for a in apps:
             a.schedule = sch.get(a.schedule_id)
+            a.user = users_map.get(a.user_id)
 
     def _sort_rows(self, rows: list[Any], model: type) -> list[Any]:
         if not self._order:
