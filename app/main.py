@@ -32,11 +32,13 @@ from starlette.middleware.sessions import SessionMiddleware
 from app.database import (
     Base,
     SessionLocal,
+    USE_FIRESTORE,
     engine,
     ensure_events_location_column,
     ensure_schedule_application_status_migration,
     ensure_sqlite_migrations,
     ensure_users_is_admin_coercion,
+    get_db,
     persistence_summary,
 )
 from app.firebase_init import (
@@ -197,25 +199,18 @@ async def _http_exception_browser_redirect(request: Request, exc: HTTPException)
     return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
 
 
-Base.metadata.create_all(bind=engine)
-ensure_sqlite_migrations(engine)
-ensure_users_is_admin_coercion(engine)
-ensure_events_location_column(engine)
-ensure_schedule_application_status_migration(engine)
+if not USE_FIRESTORE:
+    Base.metadata.create_all(bind=engine)
+    ensure_sqlite_migrations(engine)
+    ensure_users_is_admin_coercion(engine)
+    ensure_events_location_column(engine)
+    ensure_schedule_application_status_migration(engine)
 
 app.include_router(member_schedule_router)
 
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 templates = Jinja2Templates(directory="app/templates")
 attach_template_globals(templates)
-
-
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
 
 
 def get_current_user(request: Request, db: Session) -> Optional[User]:

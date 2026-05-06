@@ -214,24 +214,73 @@ def _normalize_database_url(raw: str) -> str:
     return s
 
 
-# 빈 문자열 DATABASE_URL= 은 Render 등에서 이미지 기본값을 덮어써 기동 실패·스테일 URL을 만든다.
-_env_db_raw = os.environ.get("DATABASE_URL")
-_env_db = (_env_db_raw or "").strip()
-_render_boot = str(os.environ.get("RENDER", "")).strip().lower() in ("true", "1", "yes")
-if _env_db:
-    _raw_database_url = _env_db
-elif _render_boot and Path("/.dockerenv").exists():
-    _raw_database_url = "sqlite:////data/scheduler.db"
-else:
-    _raw_database_url = _default_url
-DATABASE_URL = _normalize_database_url(_raw_database_url)
-
-_migrate_legacy_root_sqlite_if_using_default()
-_warn_if_duplicate_sqlite_files()
-
-
 def _is_render() -> bool:
     return os.environ.get("RENDER", "").lower() in ("true", "1", "yes")
+
+
+def _firebase_service_account_env_present() -> bool:
+    """Render 등에서 JSON이 환경 변수로만 있을 때 파일 없이도 감지."""
+    for key in ("FIREBASE_CREDENTIALS_JSON", "FIREBASE_SERVICE_ACCOUNT_JSON", "FIREBASE_JSON"):
+        if (os.environ.get(key) or "").strip():
+            return True
+    path = (os.environ.get("GOOGLE_APPLICATION_CREDENTIALS") or "").strip()
+    return bool(path and Path(path).is_file())
+
+
+def _use_firestore_storage() -> bool:
+    raw = os.environ.get("SCHEDULER_USE_FIRESTORE", "").strip().lower()
+    if raw in ("0", "false", "no", "off"):
+        return False
+    if raw in ("1", "true", "yes"):
+        return True
+
+    # Render Native(Python): 기본 SQLite 경로는 재배포 시 비영구라 기동이 막힘.
+    # DATABASE_URL에 Postgres나 /data SQLite가 없고 Firebase 자격 증명만 있으면 Firestore를 자동 사용.
+    if _is_render() and not Path("/.dockerenv").exists():
+        env_db = (os.environ.get("DATABASE_URL") or "").strip()
+        if env_db.startswith("postgresql"):
+            return False
+        if env_db.startswith("postgres://"):
+            return False
+        if env_db.startswith("sqlite:"):
+            norm = env_db.replace("\\", "/").lower()
+            if norm.startswith("sqlite:////data") or norm.startswith("sqlite:////app/data"):
+                return False
+        elif env_db:
+            return False
+        if _firebase_service_account_env_present():
+            logger.info(
+                "Render Native 환경에서 Firebase 서비스 계정이 보입니다. "
+                "SCHEDULER_USE_FIRESTORE 미설정 → 데이터 저장을 Firestore로 자동 전환합니다. "
+                "SQL(SQLite/Postgres)만 쓰려면 PostgreSQL DATABASE_URL을 넣거나 "
+                "SCHEDULER_USE_FIRESTORE=0 으로 명시하세요."
+            )
+            return True
+
+    return False
+
+
+USE_FIRESTORE = _use_firestore_storage()
+
+# 빈 문자열 DATABASE_URL= 은 Render 등에서 이미지 기본값을 덮어써 기동 실패·스테일 URL을 만든다.
+if USE_FIRESTORE:
+    _raw_database_url = "sqlite:///:memory:"
+    DATABASE_URL = _normalize_database_url(_raw_database_url)
+else:
+    _env_db_raw = os.environ.get("DATABASE_URL")
+    _env_db = (_env_db_raw or "").strip()
+    _render_boot = str(os.environ.get("RENDER", "")).strip().lower() in ("true", "1", "yes")
+    if _env_db:
+        _raw_database_url = _env_db
+    elif _render_boot and Path("/.dockerenv").exists():
+        _raw_database_url = "sqlite:////data/scheduler.db"
+    else:
+        _raw_database_url = _default_url
+    DATABASE_URL = _normalize_database_url(_raw_database_url)
+
+if not USE_FIRESTORE:
+    _migrate_legacy_root_sqlite_if_using_default()
+    _warn_if_duplicate_sqlite_files()
 
 
 def _is_render_native_project_sqlite(url: str) -> bool:
@@ -379,7 +428,8 @@ def _log_sqlite_persistence_hint(url: str) -> None:
         )
 
 
-_log_sqlite_persistence_hint(DATABASE_URL)
+if not USE_FIRESTORE:
+    _log_sqlite_persistence_hint(DATABASE_URL)
 
 
 def _ensure_sqlite_parent_dir(url: str) -> None:
@@ -399,9 +449,10 @@ def _ensure_sqlite_parent_dir(url: str) -> None:
         logger.warning("SQLite DB 상위 디렉터리 생성 실패: %s", e)
 
 
-_ensure_sqlite_parent_dir(DATABASE_URL)
-_enforce_persistent_storage_or_exit()
-_ensure_render_uses_durable_database_or_exit()
+if not USE_FIRESTORE:
+    _ensure_sqlite_parent_dir(DATABASE_URL)
+    _enforce_persistent_storage_or_exit()
+    _ensure_render_uses_durable_database_or_exit()
 
 
 def _engine_kwargs(url: str) -> dict:
@@ -412,7 +463,7 @@ def _engine_kwargs(url: str) -> dict:
 
 engine = create_engine(DATABASE_URL, **_engine_kwargs(DATABASE_URL))
 
-if DATABASE_URL.startswith("sqlite:"):
+if DATABASE_URL.startswith("sqlite:") and not USE_FIRESTORE:
 
     @event.listens_for(engine, "connect")
     def _sqlite_set_wal(dbapi_connection, _connection_record) -> None:
@@ -425,11 +476,11 @@ if DATABASE_URL.startswith("sqlite:"):
             pass
 
 
-_sqlite_path = _sqlite_active_file_path(DATABASE_URL)
+_sqlite_path = None if USE_FIRESTORE else _sqlite_active_file_path(DATABASE_URL)
 if _sqlite_path is not None:
     _sqlite_autobackup_if_configured(_sqlite_path)
 
-if DATABASE_URL.startswith("sqlite:"):
+if DATABASE_URL.startswith("sqlite:") and not USE_FIRESTORE:
     try:
         if _sqlite_path is not None:
             logger.info("SQLite 실제 파일: %s", _sqlite_path.resolve())
@@ -445,8 +496,10 @@ if DATABASE_URL.startswith("sqlite:"):
                 logger.info("SQLite 데이터베이스 파일: %s", _u.database)
     except Exception:
         pass
-else:
+elif not USE_FIRESTORE:
     logger.info("DB 백엔드: PostgreSQL (배포 후에도 데이터 유지)")
+else:
+    logger.info("DB 백엔드: Cloud Firestore (firebase_admin + SCHEDULER_USE_FIRESTORE=1)")
 
 SessionLocal = sessionmaker(
     autocommit=False,
@@ -454,13 +507,20 @@ SessionLocal = sessionmaker(
     bind=engine
 )
 
-atexit.register(_sqlite_shutdown_backup)
+if not USE_FIRESTORE:
+    atexit.register(_sqlite_shutdown_backup)
 
 Base = declarative_base()
 
 
 def persistence_summary() -> dict[str, Any]:
     """운영 진단용(/health). 자격 증명·호스트 등 연결 문자열은 노출하지 않는다."""
+    if USE_FIRESTORE:
+        return {
+            "backend": "firestore",
+            "survives_deploy": True,
+            "note": "데이터는 Firebase Cloud Firestore에 저장됩니다. 재배포 후에도 유지됩니다.",
+        }
     u = DATABASE_URL
     if u.startswith("postgresql"):
         return {
@@ -619,6 +679,16 @@ def ensure_events_location_column(engine) -> None:
 
 
 def get_db():
+    if USE_FIRESTORE:
+        from app.fs_session import FSSession
+
+        db = FSSession()
+        try:
+            yield db
+        finally:
+            db.close()
+        return
+
     db = SessionLocal()
     try:
         yield db
