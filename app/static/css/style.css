@@ -108,20 +108,21 @@ textarea {
 
 .logo-image {
     display: block;
-    height: 34px;
+    height: 46px;
     width: auto;
-    max-width: min(300px, 56vw);
+    max-width: min(170px, 34vw);
     object-fit: contain;
+    filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.24));
 }
 
 .logo-text {
     font-family: "Cinzel", "Noto Sans KR", serif;
-    font-size: 1.05rem;
+    font-size: 1.12rem;
     font-weight: 700;
-    letter-spacing: 0.02em;
-    color: #6d28d9;
+    letter-spacing: 0.03em;
+    color: #a16207;
     white-space: nowrap;
-    display: none;
+    text-transform: uppercase;
 }
 
 /* 가로 나열 .nav → 햄버거 메뉴(.nav-panel)로 대체 (base.html) */
@@ -371,8 +372,12 @@ body.nav-menu-open {
     }
 
     .logo-image {
-        height: 30px;
-        max-width: min(220px, 60vw);
+        height: 38px;
+        max-width: min(132px, 38vw);
+    }
+
+    .logo-text {
+        font-size: 0.9rem;
     }
 
     .nav-user-topbar {
