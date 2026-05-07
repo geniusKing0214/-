@@ -2319,6 +2319,13 @@ button.btn-google:hover {
     margin: 0;
 }
 
+/* 전역 @media (max-width:600px) .small-btn { width:100% } 가 슬롯 삭제 버튼까지 잡아 레이아웃이 깨지는 것 방지 */
+.sched-create-page .sched-slot-ui button.sched-slot-remove.btn.small-btn {
+    width: auto !important;
+    max-width: none;
+    flex-shrink: 0;
+}
+
 /* 모바일: 슬롯 — 시간 전체폭 + (정원·삭제) 한 줄로 구역 분리 */
 @media (max-width: 640px) {
     .sched-create-page .sched-slots-head {
@@ -2374,12 +2381,14 @@ button.btn-google:hover {
     }
 
     .sched-create-page .sched-slot-ui .sched-slot-meta {
+        display: flex;
         flex-direction: row;
         flex-wrap: nowrap;
         align-items: center;
-        justify-content: space-between;
+        justify-content: flex-start;
+        gap: 10px;
         width: 100%;
-        gap: 12px;
+        min-width: 0;
         padding: 12px 14px;
         box-sizing: border-box;
     }
@@ -2395,6 +2404,11 @@ button.btn-google:hover {
         border: 1px solid rgba(226, 232, 240, 0.85);
     }
 
+    .sched-create-page .sched-slot-ui .sched-slot-hold-hint {
+        flex: 0 1 auto;
+        min-width: 0;
+    }
+
     .sched-create-page .sched-slot-ui .sched-cap-text {
         font-size: 0.78rem;
         font-weight: 800;
@@ -2402,9 +2416,10 @@ button.btn-google:hover {
     }
 
     .sched-create-page .sched-slot-ui .sched-cap-input {
-        width: 3.25rem !important;
-        min-width: 3rem !important;
-        max-width: 4rem !important;
+        width: 4rem !important;
+        min-width: 3.25rem !important;
+        max-width: 5rem !important;
+        flex-shrink: 0;
         min-height: 40px;
         padding: 8px 6px !important;
         border-radius: 8px;
@@ -2416,8 +2431,11 @@ button.btn-google:hover {
 
     .sched-create-page .sched-slot-ui .sched-slot-remove {
         flex: 0 0 auto;
+        width: auto !important;
+        max-width: none;
+        margin-left: auto;
         min-height: 44px;
-        min-width: 4.5rem;
+        min-width: unset;
         padding: 0 14px;
         font-size: 0.82rem;
         font-weight: 700;
